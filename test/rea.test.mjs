@@ -118,7 +118,8 @@ test('REA 를 부르는 이름은 공식 npm 패키지 하나뿐이고, Node 판
   assert.deepEqual([path.basename(posix.cmd), ...posix.pre], ['npx', '-y', 'rea-agents@latest']);
   assert.equal(reaInstaller({ env: { REBIZ_NODE: 'v20.18.0' }, platform: 'linux' }), null);
   // Windows: npx 는 .cmd 라서 cmd.exe /d /c 로 감싼다. 깔린 rea.cmd 도 같다.
-  const win = reaInstaller({ env: { REBIZ_NODE: 'v24.11.0' }, platform: 'win32', execPath: 'C:\\Program Files\\nodejs\\node.exe' });
+  // 시험 기계에 실제로 없는 폴더를 Node 자리로 준다 (진짜 Windows 에서는 C:\\Program Files\\nodejs\\npx.cmd 가 있어서 전체 경로가 나온다)
+  const win = reaInstaller({ env: { REBIZ_NODE: 'v24.11.0' }, platform: 'win32', execPath: 'Z:\\rebiz-no-such-dir\\node.exe' });
   assert.equal(win.cmd, 'cmd.exe');
   assert.deepEqual(win.pre, ['/d', '/c', 'npx.cmd', '-y', 'rea-agents@latest']);
   const winApp = path.join(dir, 'appdata');
