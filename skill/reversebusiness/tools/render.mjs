@@ -39,7 +39,7 @@ export function findBrowser({ env = process.env, platform = process.platform, ho
   if (platform === 'darwin') {
     for (const [name, p] of MAC) for (const base of ['', home]) if (isFile(base + p)) return { name, path: base + p };
   } else if (platform === 'win32') {
-    const roots = [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean);
+    const roots = [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.PROGRAMW6432, env.LOCALAPPDATA].filter(Boolean);
     for (const [name, p] of WIN) for (const r of roots) if (isFile(path.join(r, p))) return { name, path: path.join(r, p) };
   } else {
     const dirs = String(env.PATH || '').split(path.delimiter).filter(Boolean);

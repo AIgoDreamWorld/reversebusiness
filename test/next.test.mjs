@@ -542,6 +542,14 @@ test('맡기기: 어떤 경우에도 권한 확인을 건너뛰거나 샌드박�
     assert.equal(findAgentCli('codex', { env: { REBIZ_AGENT_CLI: 'none', PATH: process.env.PATH } }), null);
     assert.equal(findAgentCli('codex', { env: { PATH: dir } }), null);
     assert.equal(findAgentCli('cursor', { env: process.env }), null);
+    // Windows: .cmd 실행 파일은 cmd.exe /d /c 로 감싸고 %APPDATA%\npm 도 찾는다
+    const winApp = path.join(dir, 'appdata');
+    const winCmd = path.join(winApp, 'npm', 'codex.cmd');
+    fs.mkdirSync(path.dirname(winCmd), { recursive: true });
+    fs.writeFileSync(winCmd, '@echo off\r\n');
+    const winCodex = findAgentCli('codex', { env: { PATH: '', APPDATA: winApp }, platform: 'win32' });
+    assert.equal(winCodex.cmd, 'cmd.exe');
+    assert.deepEqual(winCodex.pre, ['/d', '/c', winCmd]);
     // 맡기는 글에는 지킬 선이 들어 있다
     for (const p of [fillPrompt({ report: 'report.json', checkCmd: 'c' }), specPrompt({ report: 'report.json', checkCmd: 'c' }), applyPrompt({ plan: 'rebiz-apply/plan.md', page: 'index.html' })]) {
       assert.match(p, /인터넷에 접속하지 않는다/);

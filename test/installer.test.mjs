@@ -38,11 +38,11 @@ test('dry-run 은 아무것도 바꾸지 않고 바뀔 것만 보여 준다', ()
   const before = tree(dir);
   const r = run(dir, '--dry-run');
   assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /Claude Code\s+~\/\.claude\/skills\/reversebusiness\s+새로 설치/);
-  assert.match(r.out, /Codex\s+~\/\.agents\/skills\/reversebusiness\s+새로 설치/);
-  assert.match(r.out, /Antigravity\s+~\/\.gemini\/config\/skills\/reversebusiness\s+새로 설치/);
-  assert.match(r.out, /이 복사는 에이전트의 설정 파일을 건드리지 않습니다/);
-  assert.match(r.out, /REA 는 건너뜁니다\. REA 는 Node 22\.19 이상/, 'Node 가 낮으면 REA 는 건너뛰고 까닭을 알려 준다');
+  assert.match(r.out, /Claude Code\s+~[\\/]\.claude[\\/]skills[\\/]reversebusiness\s+새로 설치/);
+  assert.match(r.out, /Codex\s+~[\\/]\.agents[\\/]skills[\\/]reversebusiness\s+새로 설치/);
+  assert.match(r.out, /Antigravity\s+~[\\/]\.gemini[\\/]config[\\/]skills[\\/]reversebusiness\s+새로 설치/);
+  assert.match(r.out, /에이전트의 설정 파일은 건드리지 않으며 외부 패키지를 내려받지 않습니다/);
+  assert.doesNotMatch(r.out, /npx -y rea-agents/);
   assert.deepEqual(tree(dir), before);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -70,7 +70,7 @@ test('--yes: 찾은 에이전트에 설치하고, 예시 해부 화면을 만들
     for (const f of ['SKILL.md', '.rebiz.json', 'report.schema.json', 'tools/collect.mjs', 'tools/render.mjs', 'tools/check-report.mjs', 'tools/build-view.mjs', 'viewer/index.html', 'viewer/stage.js']) assert.ok(fs.existsSync(path.join(d, f)), `${d}/${f}`);
     assert.equal(JSON.parse(fs.readFileSync(path.join(d, '.rebiz.json'), 'utf8')).package, 'rebiz');
   }
-  assert.match(r.out, /Codex, Cursor\s+~\/\.agents\/skills\/reversebusiness/, 'Codex 와 Cursor 는 공용 폴더 한 벌');
+  assert.match(r.out, /Codex, Cursor\s+~[\\/]\.agents[\\/]skills[\\/]reversebusiness/, 'Codex 와 Cursor 는 공용 폴더 한 벌');
   assert.ok(!fs.existsSync(path.join(dir, '.cursor', 'skills')));
   // 설정 파일은 그대로
   assert.equal(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'), '{"keep":"me"}\n');
@@ -105,9 +105,9 @@ test('다시 실행하면 갱신, 남의 폴더는 건너뛰고, --force 는 백
   assert.equal(fs.readFileSync(path.join(theirs, 'SKILL.md'), 'utf8'), 'someone else\n');
   assert.ok(fs.existsSync(path.join(skillAt(dir, '.claude', 'skills'), '.rebiz.json')));
   r = run(dir, '--yes', '--no-open');
-  assert.match(r.out, /Claude Code\s+~\/\.claude\/skills\/reversebusiness\s+갱신/);
+  assert.match(r.out, /Claude Code\s+~[\\/]\.claude[\\/]skills[\\/]reversebusiness\s+갱신/);
   r = run(dir, '--yes', '--no-open', '--force');
-  assert.match(r.out, /백업\s+~\/\.agents\/skills\/reversebusiness\.backup-\d{14}/);
+  assert.match(r.out, /백업\s+~[\\/]\.agents[\\/]skills[\\/]reversebusiness\.backup-\d{14}/);
   assert.ok(fs.existsSync(path.join(theirs, '.rebiz.json')));
   const backup = fs.readdirSync(path.join(dir, '.agents', 'skills')).find((f) => f.startsWith('reversebusiness.backup-'));
   assert.equal(fs.readFileSync(path.join(dir, '.agents', 'skills', backup, 'SKILL.md'), 'utf8'), 'someone else\n');
@@ -123,14 +123,14 @@ test('--remove 는 표식이 있는 폴더만 지운다', () => {
   const other = path.join(dir, '.claude', 'skills', 'another-skill');
   fs.mkdirSync(other, { recursive: true });
   let r = run(dir, '--remove', '--dry-run');
-  assert.match(r.out, /지울 예정\s+~\/\.claude\/skills\/reversebusiness/);
+  assert.match(r.out, /지울 예정\s+~[\\/]\.claude[\\/]skills[\\/]reversebusiness/);
   assert.ok(fs.existsSync(skillAt(dir, '.claude', 'skills')));
   r = run(dir, '--remove');
   assert.equal(r.status, 0, r.out);
   assert.ok(!fs.existsSync(skillAt(dir, '.claude', 'skills')));
   assert.ok(!fs.existsSync(skillAt(dir, '.gemini', 'config', 'skills')));
   assert.ok(fs.existsSync(theirs), '표식이 없는 폴더는 남는다');
-  assert.match(r.out, /남겨 둠\s+~\/\.agents\/skills\/reversebusiness/);
+  assert.match(r.out, /남겨 둠\s+~[\\/]\.agents[\\/]skills[\\/]reversebusiness/);
   assert.ok(fs.existsSync(other));
   assert.match(run(dir, '--remove').out, /남겨 둠|지울 것이 없습니다/);
   fs.rmSync(dir, { recursive: true, force: true });

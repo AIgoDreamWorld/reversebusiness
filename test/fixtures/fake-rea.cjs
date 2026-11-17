@@ -13,7 +13,7 @@ if (cmd === '--version') { process.stdout.write('6.9.0\n'); process.exit(0); }
 if (cmd === 'setup') {
   if (fail.includes('setup')) { process.stderr.write('setup failed\n'); process.exit(1); }
   const clients = args.filter((a, i) => args[i - 1] === '--client');
-  const home = process.env.HOME || '';
+  const home = process.env.HOME || process.env.USERPROFILE || '';
   const actions = clients.map((c) => ({ id: `configure_client:${c}`, kind: 'configure_client', label: c, target: path.join(home, `.${c}.fake.json`), operation: 'create' }))
     .concat([{ id: 'install_skill', kind: 'install_skill', label: 'REA reverse-engineering skill', target: path.join(home, '.agents', 'skills', 'reverse-engineer-anything'), operation: 'install' }]);
   if (args.includes('--dry-run')) { out({ status: 'planned', plannedActions: actions, appliedActions: [] }); process.exit(0); }

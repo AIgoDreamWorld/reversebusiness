@@ -13,15 +13,15 @@
 npx github:wonseokjung/reversebusiness
 ```
 
-**한 줄이면 REA 와 reversebusiness 가 같이 깔립니다.** REA 는 페이지를 깊게 읽는 눈이고(원본 [morluto/rea](https://github.com/morluto/rea), 별개의 도구, MIT), reversebusiness 는 그 눈으로 본 것을 사업으로 정리합니다.
+**한 줄이면 reversebusiness 스킬이 바로 깔립니다.** 외부 도구를 따로 내려받거나 추가 패키지를 설치하지 않고 자체 수집기로 동작합니다. (이미 이 컴퓨터에 별도 도구 `rea` 가 깔려 있으면 정밀 모드에서 함께 쓸 뿐, 자동으로 내려받지 않습니다.)
 
-CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (REA 까지 쓰려면 Node 22.19 이상, 24.11 이상, 26 이상).
+CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows · Linux 지원).
 
 [English below](#reversebusiness-english)
 
 ## 30초 따라 하기
 
-1. 터미널에 위의 한 줄을 넣습니다. 이 컴퓨터의 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 바뀔 것을 보여 주고, 한 번 확인받은 뒤 reversebusiness 스킬을 설치합니다. REA 가 없으면 REA 도 함께 설치합니다 (확인을 받은 뒤에만 REA 의 공식 npm 패키지 `rea-agents` 를 내려받아 setup 을 부릅니다. 확인 전에는 아무것도 내려받지 않습니다).
+1. 터미널에 위의 한 줄을 넣습니다. 이 컴퓨터의 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 바뀔 것을 보여 주고, 한 번 확인받은 뒤 reversebusiness 스킬을 설치합니다. 다른 외부 도구나 패키지는 내려받지 않습니다.
 2. 끝나자마자 브라우저에 해부 화면이 열리고 예시 해부가 재생됩니다.
 3. 에이전트를 새로 시작하고 이렇게 말합니다.
 
@@ -29,7 +29,7 @@ CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (REA 까지 쓰려
    reversebusiness 로 <궁금한 사업의 주소> 를 해부해 줘
    ```
 
-에이전트 없이 바로 보고 싶으면 주소를 붙입니다. 공개 페이지를 읽어 그 주소의 해부 화면을 엽니다. REA 가 있으면 세 깊이로 읽는 정밀 모드가 저절로 켜집니다.
+에이전트 없이 바로 보고 싶으면 주소를 붙입니다. 공개 페이지를 읽어 그 주소의 해부 화면을 엽니다. (이 컴퓨터에 `rea` 가 이미 있으면 정밀 모드로 읽고, 없으면 자체 브라우저/HTML 수집기로 읽습니다.)
 
 ```bash
 npx github:wonseokjung/reversebusiness https://example.com
@@ -44,9 +44,8 @@ npx github:wonseokjung/reversebusiness https://example.com
 | `--remove` | 이 도구가 설치한 스킬만 지우기 |
 | `--no-open` | 브라우저를 열지 않고 화면 주소만 출력 |
 | `--agent claude,codex` | 에이전트를 직접 고르기 (`claude`, `codex`, `cursor`, `gemini`, `antigravity`, `agents`) |
-| `--no-rea` | REA 는 설치하지 않기 (가벼운 모드로 동작) |
 
-Node 가 REA 가 받는 판보다 낮으면 REA 는 건너뛰고 까닭과 방법을 알려 줍니다. 우리 스킬은 그대로 설치되고 가벼운 모드로 동작합니다. REA 가 이미 있으면 건드리지 않습니다. `--remove` 는 reversebusiness 만 지우고 REA 는 지우지 않습니다.
+외부 도구를 자동으로 설치하지 않으므로 `--remove` 역시 reversebusiness 가 설치한 스킬 폴더만 깨끗하게 지웁니다.
 
 ## 세 깊이로 읽기: 겉, 흐름, 속
 
@@ -95,8 +94,6 @@ rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz vi
 - **apply 가 하는 일과 하지 않는 일.** 먼저 하는 것은 견주기뿐입니다: 대상에는 있는데 내 첫 화면에는 없는 구역, 순서가 다른 구역. 첫 화면은 프로젝트의 `index.html` 에서 찾고, 프레임워크 프로젝트라 찾지 못하면 그 사실을 말하고 `--page <파일>` 이나 `--url http://localhost:3000` 을 안내합니다 (`--url` 은 내 컴퓨터 주소만 받습니다). 코드를 고치는 일은 에이전트 몫입니다. `--agent` 를 붙였을 때만, 프로젝트가 git 저장소이고 작업 트리가 깨끗한지 확인하고(아니면 멈추고 까닭을 말합니다) 새 브랜치 `rebiz/apply-날짜` 를 만든 뒤에 맡깁니다. 끝나면 `git diff --stat` 과 바뀐 파일의 겹침 검사를 보여 줍니다. 커밋, push, 배포는 하지 않습니다.
 - **에이전트에 맡기기(`--agent`)는 기본이 아닙니다.** 붙이지 않으면 붙여 넣을 한 문장만 줍니다. 붙이면 "이 단계는 내 에이전트를 한 번 실행하고, 그 에이전트의 사용량을 씁니다"를 보여 주고 한 번 확인받습니다(`--yes` 로 생략). 작업 폴더는 그 일의 폴더 하나입니다. Claude Code 는 `claude -p` 에 허용 도구를 읽기, 그 폴더 안 고치기, `rebiz check` 실행으로 좁혀 부르고, Codex 는 `codex exec --sandbox workspace-write` 로 부릅니다. 권한 확인을 건너뛰거나 샌드박스를 끄는 옵션은 쓰지 않습니다. 시간 한도는 fill 10분, apply 20분이고 `--timeout <분>` 으로 바꿉니다. 에이전트의 실행 파일이 없으면 붙여 넣을 한 문장으로 대신합니다.
 - **video.** 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 임시 프로필의 헤드리스 창으로 띄워 해부 화면의 "영상으로 저장"을 대신 누릅니다. 바깥으로 나가는 요청은 없고, 끝나면 브라우저를 끄고 프로필을 지웁니다. 저장 형식은 브라우저가 정합니다(Chrome 에서는 mp4). 브라우저가 없으면 까닭과 대신 할 일을 알려 줍니다.
-
-실제로 써 본 범위 (0.5.0, macOS, Node 20, Chrome): build, apply, video 는 예시 리포트와 지어낸 프로젝트로 끝까지 돌려 확인했습니다. Codex 에 맡기기는 `fill` 로 한 번 실행해 확인했습니다. Claude Code 에 맡기기도 `fill` 로 한 번 실행해 확인했습니다 (영문 경로와 한글이 든 경로 모두).
 
 ## 해부 화면에서 보이는 것
 
@@ -166,53 +163,51 @@ CONNECT AI LAB 이 운영하는 aicitybuilders.com 의 공개 판매 페이지 �
 
 하는 일은 폴더 복사 하나입니다. 에이전트의 설정 파일은 건드리지 않습니다. 같은 이름의 다른 폴더가 있으면 건너뛰고, 지울 때는 설치 때 남긴 표식 파일이 있는 폴더만 지웁니다.
 
-| 에이전트 | 스킬이 놓이는 곳 | 실제로 써 본 결과 (0.3.0, macOS) |
+| 에이전트 | 스킬이 놓이는 곳 | 비고 |
 |---|---|---|
-| Claude Code | `~/.claude/skills/reversebusiness` | 확인. 스킬을 불러와 수집, 검사, 화면까지 끝남 |
-| Codex | `~/.agents/skills/reversebusiness` | 확인. 공용 폴더에서 읽어 끝까지 끝남 |
-| Antigravity | `~/.gemini/config/skills/reversebusiness` | 스킬 인식과 내용 읽기는 확인. 도구를 돌리려면 명령 실행을 허용해야 함 (자동 실행에서는 권한이 없어 못 돌림, 대화형은 미확인) |
-| Cursor | `~/.agents/skills/reversebusiness` (Codex 와 같은 공용 폴더) | 미확인. 문서에 적힌 위치를 따름 |
-| Gemini CLI | `~/.agents/skills/reversebusiness` (같은 공용 폴더) | 미확인. 문서에 적힌 위치를 따름 |
+| Claude Code | `~/.claude/skills/reversebusiness` | 전용 스킬 폴더 (`%USERPROFILE%\.claude\skills\reversebusiness` on Windows) |
+| Codex | `~/.agents/skills/reversebusiness` | 공용 스킬 폴더 |
+| Antigravity | `~/.gemini/config/skills/reversebusiness` | 전용 스킬 폴더 (도구 실행 권한 허용 시 자동 수집/검사 동작) |
+| Cursor | `~/.agents/skills/reversebusiness` | Codex 와 공용 폴더 |
+| Gemini CLI | `~/.agents/skills/reversebusiness` | Codex 와 공용 폴더 |
 | 직접 지정 | `--dir <스킬 폴더>`, 또는 `--project` (지금 폴더의 `.claude/skills`) | |
 
 ## 명령 모음
 
 ```bash
-rebiz                                   # 설치(REA 가 없으면 함께, --no-rea 로 건너뜀) + 예시 해부 화면
+rebiz                                   # 스킬 설치 + 예시 해부 화면
 rebiz <주소>                            # 그 주소를 바로 해부 (--own, --light, --no-render, --out <폴더>, --pages 1~5)
 rebiz demo                              # 예시 해부 화면만
 rebiz view report.json --mine ./my-version   # 리포트를 해부 화면으로 (내 버전 미리보기 포함)
 rebiz check report.json                 # 리포트 검사 (해부만 했으면 --dissect-only)
 rebiz clone-check ./my-version --source source.json   # 내 버전이 원본과 겹치는지
-rebiz draft <REA 근거 JSON ...>         # REA 로 모은 근거에서 초안 만들기
+rebiz draft <근거 JSON ...>             # 모은 근거에서 초안 만들기
 rebiz fill report.json                  # 모름 칸 채우기: 붙여 넣을 한 문장 (--agent claude|codex 로 한 번 맡기기)
 rebiz build report.json                 # 새 사이트의 출발점 만들기 (--out <폴더>, --topic "내 사업 주제", --force)
 rebiz apply report.json --to ./내-프로젝트   # 내 첫 화면과 견준 빈칸 목록 (--page <파일>, --url http://localhost:3000, --agent claude|codex)
 rebiz video report.json                 # 해부 영상(9:16)을 파일로 (--out <파일>, --mine <내 버전 폴더>)
-rebiz --remove                          # 지우기 (REA 는 지우지 않음)
+rebiz --remove                          # 이 도구가 설치한 스킬만 지우기
 ```
 
 `fill`, `build`, `apply`, `video` 는 리포트 파일을 주지 않으면 지금 폴더의 `report.json` 을 씁니다.
 
 `rebiz` 자리에 `npx github:wonseokjung/reversebusiness` 를 쓰면 설치 없이 같은 명령이 됩니다. 에이전트가 채운 리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 `check` 를 다시 돌립니다. `source.json`, `requests.json`, `evidence/` 폴더에는 원본의 글과 요청 기록이 들어 있으므로 공개 장소에 올리지 않습니다.
 
-## REA 위에서 쓰는 별개의 도구
+## 독립 동작과 선택 연동
 
-[REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) 는 원본이고 별개의 도구입니다. reversebusiness 는 REA 를 포크하지 않았고, REA 의 코드와 문구를 담고 있지 않습니다. REA 프로젝트가 만들거나 보증한 배포물이 아닙니다.
+reversebusiness 는 어떤 외부 도구에도 의존하지 않고 단독으로 동작합니다.
 
-- REA 는 앱, 웹 페이지, 네트워크 캡처를 분석 엔진에 연결하는 도구입니다. reversebusiness 는 REA 를 눈으로 써서 공개 자료로 사업을 읽는 절차, 6칸 리포트, 해부 화면, 검사기를 더합니다.
-- 함께 설치할 때는 REA 의 공식 npm 패키지 이름 `rea-agents` 로만 부릅니다 (`npx -y rea-agents@latest setup`). 이름이 비슷한 다른 패키지나 다른 주소에서 받지 않습니다. 에이전트 설정에 REA 연결을 더하는 것은 REA 의 setup 이고, 무엇을 바꿀지는 설치 전에 화면에 나옵니다.
-- REA 가 없어도 가벼운 모드로 같은 절차를 시작할 수 있습니다.
-- REA 를 쓸 때는 REA 의 책임 있는 사용 안내도 함께 따릅니다. REA 까지 지우려면 `npx -y rea-agents@latest uninstall`.
+- 자체 HTML/헤드리스 브라우저 수집기만으로 1차 수집, 6칸 초안 생성, 리포트 검사, 해부 화면, 내 버전 생성, 9:16 영상 저장까지 끝까지 실행됩니다.
+- 만약 이 컴퓨터에 별개 오픈소스인 [REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) 의 `rea` 실행 파일이 **이미 설치되어 있다면** 정밀 모드(겉 · 흐름 · 속 읽기)에 활용할 뿐, 설치하거나 내려받지 않습니다. reversebusiness 는 REA 를 포크하지 않았고 REA 의 코드와 문구를 담고 있지 않습니다.
 
 ## 개발과 시험
 
 ```bash
-npm test                     # 설치기, 수집기, 검사기, 정밀 모드, 해부 다음 명령 시험 (임시 HOME, 임시 git 저장소, 내 컴퓨터의 시험용 사이트, REA 와 에이전트는 대역)
+npm test                     # 설치기, 수집기, 검사기, 해부 다음 명령 시험 (임시 HOME, 임시 git 저장소, 내 컴퓨터의 시험용 사이트, 에이전트/외부 도구는 대역)
 node bin/rebiz.mjs --dry-run
 ```
 
-시험한 환경은 macOS, Node 20, Chrome 입니다. 그려진 화면 읽기 시험은 Chrome 계열 브라우저가 없으면 건너뜁니다. Windows 와 Linux 에서는 아직 시험하지 못했습니다. 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 에이전트가 읽는 안내는 [AGENTS.md](AGENTS.md), 문제 신고는 [SECURITY.md](SECURITY.md) 에 있습니다.
+macOS, Windows, Linux 환경에서 Node 18 이상으로 동작하며, GitHub Actions CI(`.github/workflows/test.yml`)로 3대 OS(Ubuntu · macOS · Windows)를 자동 검증합니다. 그려진 화면 읽기/영상 추출 시험은 Chrome 계열 브라우저(Chrome, Chromium, Edge, Brave)가 없을 때 건너뜁니다. 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 에이전트가 읽는 안내는 [AGENTS.md](AGENTS.md), 문제 신고는 [SECURITY.md](SECURITY.md) 에 있습니다.
 
 ## 라이선스
 
@@ -228,13 +223,13 @@ MIT License. Copyright (c) 2026 CONNECT AI LAB. [LICENSE](LICENSE)
 npx github:wonseokjung/reversebusiness
 ```
 
-**One line installs REA and reversebusiness together.** REA is the eye that reads a page in depth (the original, a separate tool: [morluto/rea](https://github.com/morluto/rea), MIT); reversebusiness turns what it sees into a business reading.
+**One line installs the reversebusiness skill cleanly.** It runs standalone with its own collector and never downloads external packages. (If a local `rea` binary is already installed on your machine, precise mode uses it automatically.)
 
-Open source no. 1 from CONNECT AI LAB. Zero dependencies, Node 18 or later (REA itself needs Node 22.19+, 24.11+ or 26+). The skill text and terminal output are in Korean; the dissection view has a Korean and English label switch.
+Open source no. 1 from CONNECT AI LAB. Zero dependencies, Node 18 or later (macOS · Windows · Linux). The skill text and terminal output are in Korean; the dissection view has a Korean and English label switch.
 
 ## Thirty seconds
 
-1. Run the line above. It finds the agents on this machine (Claude Code, Codex, Gemini CLI, Cursor, Antigravity), shows what will change, and after one confirmation installs the skill. If REA is missing it installs REA too, by calling the setup of REA's npm package `rea-agents`, after showing the plan REA itself reports. `--no-rea` skips that.
+1. Run the line above. It finds the agents on this machine (Claude Code, Codex, Gemini CLI, Cursor, Antigravity), shows what will change, and after one confirmation installs the skill. Nothing else is downloaded.
 2. Your browser opens the dissection view and plays an example.
 3. Restart your agent and say: `Use reversebusiness to dissect <URL>`.
 
@@ -270,8 +265,6 @@ Once `report.json` exists, each next step is one command, and every command ends
 - **apply** first only compares: sections the target has and your first screen lacks, and sections in a different order. It looks for `index.html`; for a framework project it says so and points to `--page <file>` or `--url http://localhost:3000` (local addresses only). Editing code is the agent's job. Only with `--agent` does it check that the project is a git repository with a clean working tree (otherwise it stops and says why), create the branch `rebiz/apply-YYYYMMDD`, and hand over. Afterwards it shows `git diff --stat` and runs the overlap check on the changed files. It never commits, pushes or deploys.
 - **Delegating (`--agent`) is not the default.** Without it you get a sentence to paste. With it, the tool states that the step runs your agent once and uses that agent's quota, and asks once (`--yes` skips the question). The working folder is the one folder of that job. Claude Code is called as `claude -p` with a narrow allowed tool list (read, edit inside that folder, run `rebiz check`); Codex as `codex exec --sandbox workspace-write`. Options that skip permission checks or turn the sandbox off are never used. Time limits are 10 minutes for fill and 20 for apply (`--timeout <minutes>`). When the agent CLI is missing, the paste sentence is the fallback.
 - **video** opens a headless Chrome, Chromium, Edge or Brave with a throwaway profile and presses the view's own save button. Nothing leaves the machine, and the browser is closed and the profile deleted afterwards. The browser decides the format (mp4 in Chrome). Without a browser it says why and what to do instead.
-
-Tried in real use (0.5.0, macOS, Node 20, Chrome): build, apply and video end to end with the example report and a made-up project; delegation to Codex once with `fill`. Delegation to Claude Code is covered by argument tests only and has not been run for real yet.
 
 ## What the view shows
 
@@ -321,11 +314,11 @@ One public sales page of aicitybuilders.com, run by CONNECT AI LAB, read from th
 
 ## Where the skill goes
 
-Setup only copies a folder and never edits an agent configuration file: `~/.claude/skills/reversebusiness` for Claude Code, `~/.agents/skills/reversebusiness` shared by Codex, Cursor and Gemini CLI, and `~/.gemini/config/skills/reversebusiness` for Antigravity. Tried in real use on macOS: Claude Code and Codex ran end to end; Antigravity lists and reads the skill but needs command execution allowed to run the tools; Cursor and Gemini CLI are untested. `--remove` deletes only folders that carry the marker file written at install time.
+Setup only copies a folder and never edits an agent configuration file: `~/.claude/skills/reversebusiness` for Claude Code, `~/.agents/skills/reversebusiness` shared by Codex, Cursor and Gemini CLI, and `~/.gemini/config/skills/reversebusiness` for Antigravity (using `%USERPROFILE%` on Windows). `--remove` deletes only folders that carry the marker file written at install time. Cross-platform tests run on Ubuntu, macOS and Windows via `.github/workflows/test.yml`.
 
-## A separate tool that works on top of REA
+## Standalone design and optional local REA
 
-[REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) is the original and a separate tool. reversebusiness is not a fork of REA and contains no REA code or text. It is not made or endorsed by the REA project. When it installs REA alongside itself it only ever calls REA's npm package by its name `rea-agents` (`npx -y rea-agents@latest setup`), never a similarly named package or another address; the changes to agent configuration are made by REA's own setup and are shown before anything is applied. Without REA the light mode starts the same procedure. Follow REA's responsible use notice when you use it. `--remove` removes reversebusiness only; to remove REA as well run `npx -y rea-agents@latest uninstall`.
+reversebusiness works completely standalone without downloading or installing external packages. [REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) is a separate tool: reversebusiness is not a fork of REA and contains no REA code or text. If an already-installed local `rea` binary is detected on your machine, precise mode can use it automatically; otherwise it runs cleanly with its built-in collector and headless browser support.
 
 ## License
 
