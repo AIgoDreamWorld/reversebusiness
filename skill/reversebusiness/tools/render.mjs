@@ -3,7 +3,8 @@
 //
 // 지키는 것:
 //   - 임시 프로필만 쓴다. 평소 브라우저의 쿠키, 로그인, 확장 프로그램을 쓰지 않는다. 끝나면 브라우저를 끄고 임시 폴더를 지운다.
-//   - 누르지 않고, 입력하지 않고, 내려받지 않는다. 화면 캡처를 찍지 않는다.
+//   - 입력하지 않고, 내려받지 않는다. 화면 캡처를 찍지 않는다. 누르는 것은 정밀 모드의 흐름 읽기에서만,
+//     그것도 펼치기(자주 묻는 질문, 탭, 더 보기)뿐이다. 폼, 로그인, 가입, 결제, 구매 단추와 다른 페이지로 가는 링크는 누르지 않는다.
 //   - 브라우저 안에서 나가는 요청도 거른다: GET 이 아닌 요청, robots.txt 가 막은 주소, 로그인과 결제 주소,
 //     다른 사이트로 넘어가기, 분석과 광고 도구, 끼워 넣은 다른 페이지, 영상 파일은 보내지 않는다.
 //   - 쿠키를 돌려보내지 않는다 (요청을 내보내기 직전마다 쿠키를 비우고, 페이지 스크립트의 쿠키 쓰기를 끈다).
@@ -13,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-export const RENDER_LIMITS = { startMs: 12000, navMs: 15000, settleMs: 5000, idleMs: 700, growMs: 2500, maxRequests: 300, maxHeight: 12000, width: 1440, height: 900 };
+export const RENDER_LIMITS = { startMs: 12000, navMs: 15000, settleMs: 5000, idleMs: 700, growMs: 2500, maxRequests: 300, maxHeight: 12000, width: 1440, height: 900, flowClicks: 8, clickSettleMs: 1500, scriptBytes: 8_000_000 };
 
 const MAC = [
   ['Google Chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'],
@@ -118,13 +119,39 @@ function cdpPipe(child) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what} 시간 초과`)), ms))]);
 
-// 브라우저를 띄운다. 돌려주는 render(url, { allow }) 로 한 장씩 읽고, 끝나면 close() 를 꼭 부른다.
-export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {} } = {}) {
+// 흐름 읽기에서 누를 곳을 고른다: 접힌 글, 고르지 않은 탭, 펼침 단추, "더 보기". 그 밖의 것은 누르지 않는다.
+const PICK = (max) => `(() => {
+  const BAD = /(로그인|log\\s?in|sign\\s?in|sign\\s?up|가입|결제|구매|주문|신청|구독|장바구니|담기|buy|purchase|checkout|subscribe|order|pay|cart|submit|send|제출|보내기|전송|다운로드|download|삭제|delete|동의|accept|agree|공유|share|문의|contact|예약|book|시작하기|get started|start|try|체험|로그아웃|logout)/i;
+  const GOOD = /(가격|요금|플랜|plan|pricing|월간|연간|monthly|yearly|annual|더\\s?보기|see more|show more|read more|view more|자주\\s?묻는|faq|자세히|펼치기)/i;
+  const seen = new Set(), picks = [], cap = { details: 4, tab: 3, expand: 2, more: 2 }, used = {};
+  const label = (el) => (el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 60);
+  const ok = (el) => {
+    if (!(el instanceof HTMLElement) || el.closest('form') || el.disabled) return false;
+    if (el.tagName === 'A' || el.closest('a[href]')) { const a = el.tagName === 'A' ? el : el.closest('a[href]'); const h = a.getAttribute('href') || ''; if (h && !h.startsWith('#')) return false; }
+    if (el.form || el.getAttribute('type') === 'submit' || el.getAttribute('type') === 'reset') return false; // 폼에 딸린 단추는 누르지 않는다
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return false;
+    return !BAD.test(label(el));
+  };
+  const add = (el, kind) => { if (seen.has(el) || (used[kind] || 0) >= cap[kind] || !ok(el)) return; seen.add(el); used[kind] = (used[kind] || 0) + 1; picks.push({ el, kind }); };
+  document.querySelectorAll('[role="tab"][aria-selected="false"]').forEach((el) => add(el, 'tab'));
+  document.querySelectorAll('summary').forEach((el) => { if (el.parentElement && !el.parentElement.open) add(el, 'details'); });
+  document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]').forEach((el) => add(el, 'expand'));
+  document.querySelectorAll('button, [role="button"]').forEach((el) => { const t = label(el); if (el.getAttribute('role') !== 'tab' && t.length <= 24 && GOOD.test(t)) add(el, 'more'); });
+  window.__rebizPicks = picks.slice(0, ${max});
+  return window.__rebizPicks.map((p) => p.kind);
+})()`;
+const CLICK = (i) => `(() => { const p = (window.__rebizPicks || [])[${i}]; if (!p || !p.el.isConnected) return false; p.el.click(); return true; })()`;
+
+// 브라우저를 띄운다. open(url, { allow }) 로 한 장을 열어 읽고, 끝나면 close() 를 꼭 부른다.
+// debugPort 를 켜면 내 컴퓨터 안(127.0.0.1)에서만 닿는 디버깅 주소도 함께 연다 (REA 가 붙어서 읽을 때 쓴다).
+export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {}, debugPort = false } = {}) {
   if (!browser) throw new Error('브라우저를 찾지 못했어요');
   const L = { ...RENDER_LIMITS, ...limits };
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-render-'));
   const child = spawn(browser.path, [
-    '--headless=new', '--remote-debugging-pipe', `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
+    '--headless=new', '--remote-debugging-pipe', ...(debugPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []), `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--disable-background-networking', '--disable-component-update',
     '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', 'about:blank',
@@ -147,22 +174,31 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
     return { exited, profileRemoved: !fs.existsSync(profile) };
   }
 
-  let ua;
+  let ua, endpoint = '';
   try {
     const v = await withTimeout(cdp.send('Browser.getVersion'), L.startMs, '브라우저 시작');
     // 누가 읽는지 숨기지 않는다: 헤드리스 브라우저라는 것과 이 도구의 이름을 함께 밝힌다.
     ua = `${v.userAgent} rebiz/${version}${repo ? ` (+${repo})` : ''}`;
     try { await cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch { /* 옛 브라우저 */ }
+    if (debugPort) {
+      const file = path.join(profile, 'DevToolsActivePort');
+      for (let i = 0; i < 40 && !fs.existsSync(file); i += 1) await sleep(100);
+      const port = fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8').split('\n')[0]) : 0;
+      if (port > 0) endpoint = `http://127.0.0.1:${port}`;
+    }
   } catch (e) { await close(); throw e; }
 
-  async function render(url, { allow = async () => ({ ok: true }) } = {}) {
+  // 한 장을 연다. 돌려주는 것으로 읽고(read), 펼치고(flow), 닫는다(close).
+  async function open(url, { allow = async () => ({ ok: true }), keepScripts = false } = {}) {
     const stats = { allowed: 0, blocked: 0, why: {}, status: 0, mainBlocked: '', cookiesDropped: 0 };
+    const hosts = new Map(); // 호스트 이름 -> { count, types, sent } (본문과 쿠키는 남기지 않는다)
+    const scripts = new Map(); // 같은 사이트 스크립트의 요청 번호 -> 주소
     const note = (why) => { stats.blocked += 1; stats.why[why] = (stats.why[why] || 0) + 1; };
     const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const S = (method, params) => cdp.send(method, params, sessionId);
     const inflight = new Set();
-    let loaded = false, lastActivity = Date.now(), mainFrame = '', first = true;
+    let loaded = false, lastActivity = Date.now(), mainFrame = '', first = true, locked = false;
     const off = cdp.on((m) => {
       if (m.sessionId !== sessionId) return;
       const p = m.params || {};
@@ -174,9 +210,11 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
         (async () => {
           const req = p.request || {};
           const isMain = p.resourceType === 'Document' && p.frameId === mainFrame;
-          let verdict;
+          let verdict, host = '';
+          try { host = new URL(req.url).hostname; } catch { /* 주소가 아님 */ }
           if (!/^https?:/i.test(req.url)) verdict = { ok: true };
           else if (stats.allowed >= L.maxRequests) verdict = { ok: false, why: '요청 한도' };
+          else if (isMain && locked) verdict = { ok: false, why: '펼친 뒤 다른 페이지로 넘어가기' };
           else if (req.method !== 'GET') verdict = { ok: false, why: 'GET 이 아닌 요청' };
           else if (p.resourceType === 'Document' && !isMain) verdict = { ok: false, why: '끼워 넣은 다른 페이지' };
           else if (['Ping', 'CSPViolationReport', 'Media', 'EventSource', 'WebSocket'].includes(p.resourceType)) verdict = { ok: false, why: p.resourceType === 'Media' ? '영상 파일' : '알림 신호' };
@@ -184,22 +222,28 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
             try { verdict = await allow(req.url, { isMain, first: isMain && first, type: p.resourceType }); } catch { verdict = { ok: false, why: '확인 실패' }; }
           }
           if (isMain) first = false;
+          if (host) {
+            const h = hosts.get(host) || { count: 0, types: new Set(), sent: 0 };
+            h.count += 1; h.types.add(p.resourceType); if (verdict.ok) h.sent += 1;
+            hosts.set(host, h);
+          }
           try {
             if (verdict.ok) {
               stats.allowed += 1;
               if (p.networkId) inflight.add(p.networkId);
+              if (keepScripts && p.resourceType === 'Script' && p.networkId && verdict.sameSite) scripts.set(p.networkId, req.url);
               // 받은 쿠키를 돌려보내지 않도록, 요청을 내보내기 직전에 쿠키를 비운다.
               try { await S('Network.clearBrowserCookies'); } catch { /* 그대로 보낸다 */ }
               await S('Fetch.continueRequest', { requestId: p.requestId });
             } else {
               note(verdict.why || '막음');
-              if (isMain) stats.mainBlocked = verdict.why || '막음';
+              if (isMain && !locked) stats.mainBlocked = verdict.why || '막음';
               await S('Fetch.failRequest', { requestId: p.requestId, errorReason: 'BlockedByClient' });
             }
           } catch { /* 탭이 이미 닫힘 */ }
         })();
       } else if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') { inflight.delete(p.requestId); lastActivity = Date.now(); } else if (m.method === 'Network.responseReceived') {
-        if (p.type === 'Document' && p.frameId === mainFrame && p.response) stats.status = p.response.status;
+        if (p.type === 'Document' && p.frameId === mainFrame && p.response && !locked) stats.status = p.response.status;
       } else if (m.method === 'Page.loadEventFired') { loaded = true; lastActivity = Date.now(); } else if (m.method === 'Page.javascriptDialogOpening') { S('Page.handleJavaScriptDialog', { accept: false }).catch(() => {}); }
     });
     const idle = async (maxMs) => {
@@ -207,6 +251,19 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       while (Date.now() < until) { if (inflight.size === 0 && Date.now() - lastActivity >= L.idleMs) return true; await sleep(100); }
       return false;
     };
+    const evaluate = async (expression, ms = 8000) => {
+      const r = await withTimeout(S('Runtime.evaluate', { expression, returnByValue: true, userGesture: true }), ms, '화면 읽기');
+      return r.result ? r.result.value : undefined;
+    };
+    let closed = false;
+    const closePage = async () => {
+      if (closed) return;
+      closed = true;
+      off();
+      try { await withTimeout(cdp.send('Target.closeTarget', { targetId }), 2000, '탭 닫기'); } catch { /* 브라우저를 끌 때 같이 닫힌다 */ }
+    };
+    const started = Date.now();
+    let timedOut = false;
     try {
       await S('Page.enable');
       await S('Network.enable');
@@ -215,25 +272,75 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       mainFrame = (await S('Page.getFrameTree')).frameTree.frame.id;
       try { await S('Emulation.setDocumentCookieDisabled', { disabled: true }); } catch { /* 옛 브라우저 */ }
       await S('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
-      const started = Date.now();
       S('Page.navigate', { url }).catch(() => {});
       while (!loaded && Date.now() - started < L.navMs && !stats.mainBlocked) await sleep(100);
-      const timedOut = !loaded && !stats.mainBlocked;
+      timedOut = !loaded && !stats.mainBlocked;
       if (!stats.mainBlocked || !first) await idle(L.settleMs);
       // 아래쪽이 화면에 들어와야 그려지는 구역이 있으므로, 누르거나 굴리지 않고 창만 길게 늘인다.
-      let page = { html: '', blocks: [], docH: 0, docW: L.width, url };
       try {
-        const h = (await S('Runtime.evaluate', { expression: 'Math.max(document.documentElement ? document.documentElement.scrollHeight : 0, document.body ? document.body.scrollHeight : 0)', returnByValue: true })).result.value || 0;
+        const h = (await evaluate('Math.max(document.documentElement ? document.documentElement.scrollHeight : 0, document.body ? document.body.scrollHeight : 0)')) || 0;
         if (h > L.height) { await S('Emulation.setDeviceMetricsOverride', { width: L.width, height: Math.min(h, L.maxHeight), deviceScaleFactor: 1, mobile: false }); lastActivity = Date.now(); await idle(L.growMs); }
-        const r = await withTimeout(S('Runtime.evaluate', { expression: EXTRACT, returnByValue: true }), 8000, '화면 읽기');
-        if (r.result && r.result.value) page = r.result.value;
-      } catch { /* 읽지 못하면 빈 결과를 돌려준다 */ }
-      return { ...page, status: stats.status, stats, timedOut, userAgent: ua, ms: Date.now() - started };
-    } finally {
-      off();
-      try { await withTimeout(cdp.send('Target.closeTarget', { targetId }), 2000, '탭 닫기'); } catch { /* 브라우저를 끌 때 같이 닫힌다 */ }
-    }
+      } catch { /* 길이를 못 재면 그대로 읽는다 */ }
+    } catch (e) { await closePage(); throw e; }
+
+    return {
+      targetId, stats, userAgent: ua,
+      get status() { return stats.status; },
+      get timedOut() { return timedOut; },
+      get ms() { return Date.now() - started; },
+      // 그려진 화면의 글자, 구조, 구역의 위치와 크기
+      async read() {
+        let page = { html: '', blocks: [], docH: 0, docW: L.width, url };
+        try { const v = await evaluate(EXTRACT); if (v) page = v; } catch { /* 읽지 못하면 빈 결과 */ }
+        return page;
+      },
+      // 흐름 읽기: 펼치기만 한다. 누른 종류와 횟수만 돌려준다.
+      async flow({ max = L.flowClicks } = {}) {
+        const out = { clicks: 0, kinds: {}, moved: false };
+        locked = true; // 여기서부터 다른 페이지로 넘어가는 요청은 막는다
+        let kinds = [];
+        let before = '';
+        try { before = await evaluate('location.pathname'); kinds = (await evaluate(PICK(Math.max(0, Math.min(max, 12))))) || []; } catch { return out; }
+        for (let i = 0; i < kinds.length; i += 1) {
+          try {
+            if (!(await evaluate(CLICK(i), 3000))) continue;
+            out.clicks += 1; out.kinds[kinds[i]] = (out.kinds[kinds[i]] || 0) + 1;
+            lastActivity = Date.now();
+            await idle(L.clickSettleMs);
+            if ((await evaluate('location.pathname')) !== before) { out.moved = true; break; }
+          } catch { break; }
+        }
+        return out;
+      },
+      // 요청이 나가려던 호스트 이름과 종류. 본문, 쿠키, 주소의 뒷부분은 담지 않는다.
+      hosts() { return [...hosts.entries()].map(([host, h]) => ({ host, count: h.count, sent: h.sent, types: [...h.types].sort() })).sort((a, b) => b.count - a.count); },
+      // 속 읽기에 쓰는 같은 사이트 스크립트의 글. 메모리에서만 훑고 저장하지 않는다.
+      async scripts() {
+        const out = [];
+        let total = 0;
+        for (const [requestId, src] of scripts) {
+          if (total > L.scriptBytes) break;
+          try {
+            const r = await withTimeout(S('Network.getResponseBody', { requestId }), 5000, '스크립트 읽기');
+            const text = r.base64Encoded ? Buffer.from(r.body, 'base64').toString('utf8') : r.body;
+            total += text.length;
+            out.push({ url: src, text });
+          } catch { /* 이미 비워진 것은 건너뛴다 */ }
+        }
+        return out;
+      },
+      close: closePage,
+    };
   }
 
-  return { render, close, browser, userAgent: ua, profile, pid: child.pid };
+  // 한 장을 열어 읽고 닫는다.
+  async function render(url, opts = {}) {
+    const pg = await open(url, opts);
+    try {
+      const page = await pg.read();
+      return { ...page, status: pg.status, stats: pg.stats, timedOut: pg.timedOut, userAgent: ua, ms: pg.ms, hosts: pg.hosts() };
+    } finally { await pg.close(); }
+  }
+
+  return { open, render, close, browser, userAgent: ua, profile, pid: child.pid, endpoint };
 }

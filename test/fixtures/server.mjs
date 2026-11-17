@@ -19,6 +19,8 @@ export async function startSite({ robots = 'User-agent: *\nAllow: /\nDisallow: /
       return res.end(robotsStatus === 200 ? robots : 'no');
     }
     if (u.pathname === '/spa' || u.pathname === '/spa-pricing') return html(page('spa.html'));
+    if (u.pathname === '/shop') return html(page('shop.html'));
+    if (u.pathname === '/shop.js') { res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); return res.end(page('shop-script.txt')); }
     if (u.pathname === '/spa.js') { res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'set-cookie': 'js=should-not-come-back; Path=/' }); return res.end(page('spa-script.txt')); }
     if (u.pathname === '/api/data') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"secret":"robots 가 막은 주소"}'); }
     if (u.pathname === '/') return html(page('index.html'));

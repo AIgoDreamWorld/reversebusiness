@@ -1,4 +1,4 @@
-// reversebusiness 해부 장면. 캔버스 한 장에 그리는 짧은 영화(약 27초)이고, 같은 그림을 9:16 영상으로 저장한다.
+// reversebusiness 해부 장면. 캔버스 한 장에 그리는 짧은 영화(약 29초)이고, 같은 그림을 9:16 영상으로 저장한다.
 // 의존성 없음. 그리는 재료는 리포트의 숫자와 내 말로 쓴 이름뿐이다. 원본의 화면, 문구, 로고는 쓰지 않는다.
 (function () {
   'use strict';
@@ -6,12 +6,15 @@
   var C = { bg: '#07080A', panel: '#0D0F12', ivory: '#EBE2D2', dim: '#B9B1A3', mute: '#8A8478', gold: '#D6892A', hi: '#F2B45A' };
   var SANS = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Helvetica Neue", system-ui, sans-serif';
   var MONO = '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
-  var DUR = 27.5;
-  var SC = { title: [0, 2.8], read: [2.8, 7.0], split: [7.0, 13.4], flow: [13.4, 19.6], mine: [19.6, 24.9], end: [24.9, 27.5] };
+  var DUR = 29.4;
+  var SC = { title: [0, 2.6], depth: [2.6, 5.4], read: [5.4, 9.4], split: [9.4, 15.6], flow: [15.6, 21.4], mine: [21.4, 26.6], end: [26.6, 29.4] };
+  var STILL = SC.split[1] - 0.9; // 멈춰 놓고 보여 줄 때 쓰는 장면 (층이 다 벌어진 때)
   var ROLES = ['attract', 'value', 'pay', 'return'];
   var STAGES = ['arrive', 'first_value', 'signup', 'payment', 'return'];
   var TXT = {
     ko: {
+      s0: '읽은 깊이', s0sub: '겉에서 속까지, 허락된 데까지만', d_surface: '겉 읽기', d_flow: '흐름 읽기', d_code: '속 읽기', d_surface_s: '화면의 글과 구조', d_flow_s: '펼치기와 요청이 나간 곳', d_code_s: '내려온 코드 안의 이름',
+      ds_done: '읽음', ds_partial: '일부만', ds_skipped: '안 함', ds_blocked: '약관이 막음', ds_failed: '실패', code: '코드 흔적',
       s1: '읽기', s1sub: '공개 페이지의 구역을 위에서 아래로', s2: '해부', s2sub: '구역마다 하는 일로 층을 나눕니다',
       s3: '돈의 흐름', s3sub: '유입에서 다시 오기까지, 확인된 만큼만', s4: '내 버전', s4sub: '구조만 배우고 나머지는 새로 만듭니다',
       attract: '데려오는 층', value: '가치를 주는 층', pay: '돈 받는 층', 'return': '다시 오게 하는 층', other: '그 밖',
@@ -22,6 +25,8 @@
       end1: '확인한 만큼만 말합니다', motto: '모두를 위한 AI 교육', tagline: '주소 하나로 사업을 해부합니다', by_role: '층은 추정, 구역 순서는 관찰'
     },
     en: {
+      s0: 'DEPTH', s0sub: 'From surface to code, only as far as allowed', d_surface: 'Surface', d_flow: 'Flow', d_code: 'Code', d_surface_s: 'Text and structure on screen', d_flow_s: 'Expanding, and where requests go', d_code_s: 'Names inside the downloaded code',
+      ds_done: 'READ', ds_partial: 'PARTIAL', ds_skipped: 'NOT DONE', ds_blocked: 'BLOCKED BY TERMS', ds_failed: 'FAILED', code: 'CODE TRACE',
       s1: 'READ', s1sub: 'Sections of the public page, top to bottom', s2: 'DISSECT', s2sub: 'Layers by the job each section does',
       s3: 'MONEY FLOW', s3sub: 'From arrival to return, only what was confirmed', s4: 'MY VERSION', s4sub: 'Learn the structure, make everything else new',
       attract: 'Attract layer', value: 'Value layer', pay: 'Pay layer', 'return': 'Return layer', other: 'Other',
@@ -52,7 +57,7 @@
     var m = (r && r.meta) || {}, tg = m.target || {}, s = (r && r.sections) || {};
     var host = '', pathName = '';
     try { var u = new URL(str(tg.url)); host = u.hostname.replace(/^www\./, ''); pathName = u.pathname === '/' ? '' : u.pathname; } catch (e) {}
-    var n = { observed: 0, inferred: 0, unknown: 0 };
+    var n = { observed: 0, inferred: 0, unknown: 0, code: 0 };
     function add(c) { if (c && n[c.status] !== undefined) n[c.status] += 1; }
     var mo = s.money || {};
     ['customer', 'problem', 'price', 'revenue'].forEach(function (k) { arr(mo[k]).forEach(add); });
@@ -84,6 +89,10 @@
     var mv = s.my_version || {};
     return {
       name: str(tg.name), host: host, path: pathName, oneLine: str(m.one_line), counts: n, evidenceN: arr(r && r.evidence).length,
+      depth: ['surface', 'flow', 'code'].map(function (key) {
+        var st = arr((m.depth || {}).steps).filter(function (x) { return x && x.key === key; })[0];
+        return { key: key, state: st && /^(done|partial|skipped|blocked|failed)$/.test(st.state) ? st.state : (key === 'surface' ? 'done' : 'skipped') };
+      }),
       blocks: blocks, synthesized: synthesized, roleCount: roleCount, nodes: nodes,
       mine: { name: str(mv.working_name), img: mine && mine.img ? mine.img : null, has: !!str(mv.working_name), mapped: blocks.some(function (b) { return b.mine; }) }
     };
@@ -402,6 +411,48 @@
       var q = screenQuad(G, i, ki, o.kc, L);
       drawPlate(ctx, q, b, L, { alpha: o.alpha(i, b), thick: ki, hot: o.hot ? o.hot(b) : false, glyph: o.glyph ? o.glyph(i) : null });
     }
+  }
+
+  // 읽은 깊이: 겉, 흐름, 속. 읽은 단계는 금색 선이 차오르고, 못 읽은 단계는 점선으로 남는다.
+  function sceneDepth(ctx, L, M, T, k) {
+    var W = L.W, H = L.H, s = L.s;
+    sceneTitle(ctx, L, T, T.s0, T.s0sub, k);
+    var x0 = L.portrait ? L.pad : W * 0.42, w = L.portrait ? W - L.pad * 2 : W * 0.5;
+    var y0 = L.portrait ? L.top + 60 * s : H * 0.26, rowH = L.portrait ? 250 * s : H * 0.19;
+    M.depth.forEach(function (d, i) {
+      var a = easeOut(seg(k, 0.12 + i * 0.16, 0.26 + i * 0.16));
+      if (a <= 0.01) return;
+      var y = y0 + i * rowH, read = d.state === 'done' || d.state === 'partial';
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      font(ctx, L.f.mono, 400, true);
+      ctx.fillStyle = read ? C.gold : C.mute;
+      ctx.fillText('0' + (i + 1), x0, y);
+      font(ctx, L.f.body * 1.5, 200);
+      ctx.fillStyle = read ? C.ivory : C.dim;
+      ctx.fillText(T['d_' + d.key], x0 + 56 * s, y + 4 * s);
+      var nw = ctx.measureText(T['d_' + d.key]).width;
+      font(ctx, L.f.small, 300);
+      ctx.fillStyle = C.dim;
+      ctx.fillText(T['d_' + d.key + '_s'], x0 + 56 * s, y + L.f.small * 1.7 + 6 * s);
+      // 상태 표
+      var tag = T['ds_' + d.state];
+      font(ctx, L.f.mono * 0.82, 400, true);
+      var tw = ctx.measureText(tag).width + 18 * s, th = L.f.mono * 1.4, tx = Math.min(x0 + 56 * s + nw + 24 * s, x0 + w - tw), ty = y - th * 0.82;
+      if (d.state === 'done') { ctx.fillStyle = C.gold; ctx.fillRect(tx, ty, tw, th); ctx.fillStyle = C.bg; }
+      else if (d.state === 'partial') { ctx.strokeStyle = C.gold; ctx.lineWidth = Math.max(1, 1.4 * s); ctx.strokeRect(tx, ty, tw, th); ctx.fillStyle = C.hi; }
+      else { ctx.setLineDash([4 * s, 4 * s]); ctx.strokeStyle = C.mute; ctx.lineWidth = Math.max(1, 1.2 * s); ctx.strokeRect(tx, ty, tw, th); ctx.setLineDash([]); ctx.fillStyle = C.dim; }
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tag, tx + 9 * s, ty + th / 2 + s);
+      // 깊이 선
+      var ly = y + L.f.small * 1.7 + 34 * s, fill = easeOut(seg(k, 0.2 + i * 0.16, 0.5 + i * 0.16));
+      ctx.fillStyle = rgba(C.ivory, 0.1);
+      ctx.fillRect(x0, ly, w, 2 * s);
+      if (read) { ctx.fillStyle = C.gold; ctx.fillRect(x0, ly - s, w * fill * (d.state === 'partial' ? 0.6 : 1), 4 * s); }
+      else { ctx.strokeStyle = C.mute; ctx.lineWidth = Math.max(1, 1.5 * s); ctx.setLineDash([8 * s, 8 * s]); ctx.beginPath(); ctx.moveTo(x0, ly + s); ctx.lineTo(x0 + w * fill, ly + s); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.restore();
+    });
   }
 
   function sceneRead(ctx, L, M, G, T, k) {
@@ -747,7 +798,7 @@
       x += w;
     });
     font(ctx, L.f.sub, 300); ctx.fillStyle = C.dim; ctx.textAlign = 'center';
-    ctx.fillText(T.end1, W / 2, by + 74 * s);
+    ctx.fillText(T.end1 + (M.counts.code ? '  ·  ' + T.code + ' ' + M.counts.code : ''), W / 2, by + 74 * s);
     // 이름
     var wy = H * (L.portrait ? 0.66 : 0.76);
     var wa = easeOut(seg(k, 0.3, 0.55));
@@ -781,13 +832,14 @@
     if (cache.key !== key) { cache.L = layoutOf(W, H); cache.G = geoOf(M, cache.L); cache.key = key; }
     var L = cache.L, G = cache.G;
     t = clamp(t, 0, DUR);
-    var no = t < SC.read[0] ? 0 : t < SC.split[0] ? 1 : t < SC.flow[0] ? 2 : t < SC.mine[0] ? 3 : t < SC.end[0] ? 4 : 0;
+    var no = t < SC.depth[0] ? 0 : t < SC.split[0] ? 1 : t < SC.flow[0] ? 2 : t < SC.mine[0] ? 3 : t < SC.end[0] ? 4 : 0;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     backdrop(ctx, L);
     var out = 0; // 장면 끝에서 어두워지는 정도
     if (t < SC.title[1]) sceneIntro(ctx, L, M, T, seg(t, SC.title[0], SC.title[1]));
+    else if (t < SC.depth[1]) { sceneDepth(ctx, L, M, T, seg(t, SC.depth[0], SC.depth[1])); out = seg(t, SC.depth[1] - 0.35, SC.depth[1]); }
     else if (t < SC.read[1]) sceneRead(ctx, L, M, G, T, seg(t, SC.read[0], SC.read[1]));
     else if (t < SC.split[1]) { sceneSplit(ctx, L, M, G, T, seg(t, SC.split[0], SC.split[1]), 1); out = seg(t, SC.split[1] - 0.45, SC.split[1]); }
     else if (t < SC.flow[1]) { sceneFlow(ctx, L, M, T, seg(t, SC.flow[0], SC.flow[1]), t); out = seg(t, SC.flow[1] - 0.4, SC.flow[1]); }
@@ -802,7 +854,7 @@
   function mount(canvas, getModel, getLang) {
     var ctx = canvas.getContext('2d');
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var state = { t: reduce ? 12.6 : 0, playing: !reduce, last: 0, visible: true, hold: 0, raf: 0 };
+    var state = { t: reduce ? STILL : 0, playing: !reduce, last: 0, visible: true, hold: 0, raf: 0 };
     function size() {
       var r = canvas.getBoundingClientRect();
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -880,5 +932,5 @@
     return { cancel: function () { if (stopped) return; stopped = true; cancelled = true; cancelAnimationFrame(raf); try { rec.stop(); } catch (e) {} } };
   }
 
-  window.RebizStage = { DUR: DUR, SC: SC, TXT: TXT, GLYPHS: GLYPHS, buildModel: buildModel, draw: draw, mount: mount, record: record, canRecord: canRecord };
+  window.RebizStage = { DUR: DUR, SC: SC, STILL: STILL, TXT: TXT, GLYPHS: GLYPHS, buildModel: buildModel, draw: draw, mount: mount, record: record, canRecord: canRecord };
 })();

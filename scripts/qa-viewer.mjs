@@ -30,13 +30,13 @@ try {
     const rectOf = (sel) => page.evaluate(`(() => { const n = document.querySelector(${JSON.stringify(sel)}); n.scrollIntoView({ block: 'start' }); const r = n.getBoundingClientRect(); return { x: Math.max(0, r.left + scrollX), y: r.top + scrollY, width: r.width, height: r.height }; })()`);
     await shot('first', {});
     // 해부 장면: 장면마다 한 장
-    const times = args.includes('--frames') ? [1.6, 5.2, 9.2, 12.6, 16.8, 19.2, 22.6, 24.4, 26.6] : [12.6];
+    const times = args.includes('--frames') ? [1.4, 4.6, 7.8, 11.8, 14.7, 19.0, 21.0, 24.4, 26.2, 28.6] : [14.7];
     for (const t of times) {
       await page.evaluate(`RebizSections.state().player.seek(${t})`);
       await wait(150);
       await shot(`stage_${String(t).replace('.', '_')}`, { clip: await rectOf('#stage') });
     }
-    await page.evaluate('RebizSections.state().player.seek(12.6)');
+    await page.evaluate('RebizSections.state().player.seek(RebizStage.STILL)');
     await shot('flow', { clip: await rectOf('#show-flow') });
     for (const v of [0, 55, 100]) {
       await page.evaluate(`(() => { const r = document.getElementById('cmp-range'); r.value = ${v}; r.dispatchEvent(new Event('input')); })()`);

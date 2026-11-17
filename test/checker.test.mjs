@@ -21,7 +21,7 @@ test('예시 리포트는 검사를 통과한다', () => {
   const { errors, warnings, counts } = checkReport(example());
   assert.deepEqual(errors, []);
   assert.deepEqual(warnings, []);
-  assert.deepEqual(counts, { observed: 20, inferred: 6, unknown: 7 });
+  assert.deepEqual(counts, { observed: 20, inferred: 6, unknown: 7, code: 0 });
 });
 
 test('리포트 검사: 선을 넘는 내용을 잡는다', () => {

@@ -17,7 +17,9 @@ function home(...agents) {
   return dir;
 }
 function run(dir, ...args) {
-  const env = { ...process.env, HOME: dir, USERPROFILE: dir, NO_COLOR: '1', TMPDIR: path.join(dir, 'tmp') };
+  // REA 는 없는 것으로, Node 는 REA 가 받지 않는 판으로 둔다: 시험에서 진짜 REA 나 npm 을 부르지 않는다. (REA 설치 흐름은 rea.test.mjs 에서 대역으로 본다.)
+  const env = { ...process.env, HOME: dir, USERPROFILE: dir, NO_COLOR: '1', TMPDIR: path.join(dir, 'tmp'), REBIZ_REA: 'none', REBIZ_NODE: 'v20.0.0' };
+  delete env.REBIZ_REA_INSTALLER; delete env.REBIZ_REA_RUNNER;
   delete env.CLAUDE_CONFIG_DIR; delete env.CODEX_HOME;
   fs.mkdirSync(env.TMPDIR, { recursive: true });
   const r = spawnSync(process.execPath, [CLI, ...args], { env, cwd: dir, encoding: 'utf8' });
@@ -39,7 +41,8 @@ test('dry-run 은 아무것도 바꾸지 않고 바뀔 것만 보여 준다', ()
   assert.match(r.out, /Claude Code\s+~\/\.claude\/skills\/reversebusiness\s+새로 설치/);
   assert.match(r.out, /Codex\s+~\/\.agents\/skills\/reversebusiness\s+새로 설치/);
   assert.match(r.out, /Antigravity\s+~\/\.gemini\/config\/skills\/reversebusiness\s+새로 설치/);
-  assert.match(r.out, /에이전트의 설정 파일은 건드리지 않습니다/);
+  assert.match(r.out, /이 복사는 에이전트의 설정 파일을 건드리지 않습니다/);
+  assert.match(r.out, /REA 는 건너뜁니다\. REA 는 Node 22\.19 이상/, 'Node 가 낮으면 REA 는 건너뛰고 까닭을 알려 준다');
   assert.deepEqual(tree(dir), before);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -176,6 +179,20 @@ test('도움말, 판 번호, 모르는 인자', () => {
   assert.equal(bad.status, 2);
   assert.match(bad.out, /모르는 인자: --nope/);
   assert.ok(!/\x1b\[/.test(run(dir, '--help').out), '사람이 보는 터미널이 아니면 색을 쓰지 않는다');
+  // 다음 판에 들어올 명령의 자리: 이름을 잡아 두고, 지금은 안내만 한다
+  for (const [cmd, hint] of [['build', /6번 칸 명세만 보고 내 버전을 새로 만들어 줘/], ['apply', /새 브랜치에서 하고, 바뀔 것을 먼저 보여 줘/], ['video', /영상으로 저장 \(9:16\)/]]) {
+    const r = run(dir, cmd);
+    assert.equal(r.status, 2, r.out);
+    assert.match(r.out, /다음 판\(0\.5\.0\)에 들어옵니다/);
+    assert.match(r.out, hint);
+  }
+  const h = run(dir, '--help').out;
+  assert.match(h, /만들기와 적용 {2}\(다음 판 0\.5\.0 에 들어옵니다\)\n\s+rebiz build \[--topic "내 사업 주제"\]/);
+  assert.match(h, /rebiz apply <내 프로젝트 폴더>/);
+  assert.match(h, /rebiz video\s+해부 영상 뽑기 {2}\(0\.5\.0 예정\)/);
+  assert.equal(run(dir, 'dissect').status, 2);
+  assert.match(run(dir, 'dissect').out, /사용: rebiz <주소>/);
+  assert.deepEqual(tree(dir).filter((f) => !f.startsWith('tmp')), [], '안내만 하는 명령은 아무것도 만들지 않는다');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

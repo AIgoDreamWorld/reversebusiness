@@ -2,7 +2,7 @@
 // 가벼운 수집기: 공개 페이지 몇 장을 한 번씩 받아 report.json 초안을 만든다. 의존성 없음, Node 18 이상.
 //
 // 사용:
-//   node collect.mjs <주소> [--out <폴더>] [--pages 5] [--own] [--no-render]
+//   node collect.mjs <주소> [--out <폴더>] [--pages 5] [--own] [--no-render] [--light]
 //
 // 지키는 것:
 //   - robots.txt 를 가장 먼저 받는다. 금지된 주소는 받지 않고 멈춘다.
@@ -12,6 +12,11 @@
 //   - 쿠키와 토큰을 저장하지도 보내지도 않는다.
 //   - 받은 HTML 에 글이 얇으면(스크립트로 그리는 페이지), 이 컴퓨터의 Chrome 계열 브라우저를 임시 프로필로 잠깐 띄워
 //     그려진 화면을 한 번 읽는다 (render.mjs). 같은 한도 안에서만, 누르기와 입력 없이. --no-render 로 끈다.
+//   - 정밀 모드: REA(별개의 도구)가 있으면 세 깊이로 읽는다. --light 로 끈다.
+//       겉 읽기   그려진 화면의 글과 구조 (REA inspect-web-page)
+//       흐름 읽기 펼치기만 누르고(자주 묻는 질문, 탭, 더 보기), 페이지가 요청을 보내려던 호스트 이름만 모은다
+//       속 읽기   이미 내려온 스크립트에서 화면 경로 이름, 결제 모듈 이름, 가격처럼 보이는 글자를 찾는다 (REA analyze-web-bundle).
+//                 약관이 코드 분석을 금지하거나 약관을 읽지 못했으면 하지 않는다 (내 것이면 한다). 찾은 주소는 부르지 않는다.
 //   - 누가 읽는지 숨기지 않는다 (User-Agent 에 이름과 저장소 주소).
 //   - 401, 403, 429 나 봇 확인 화면을 만나면 넘지 않고 멈춘다.
 // 채울 수 있는 것만 관찰로 적고, 나머지는 모름으로 둔다. 해석(고객, 문제, 내 버전)은 하지 않는다.
@@ -19,12 +24,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseHtml, walk, find, byTag, textOf, rawText, textLines, isEl } from './html-lite.mjs';
-import { scrub, cleanUrl, PRICE } from './from-rea.mjs';
+import { scrub, cleanUrl, PRICE, recordsOf, readInspect, dropSecrets } from './from-rea.mjs';
+import { reaRunner, runRea, reaSkillPresent, REA_REPO } from './rea-bridge.mjs';
+import { classifyHosts, scanScripts, readBundleFacts, termsForbidCodeReading, looksBehindLogin, SERVICE_KINDS } from './deep.mjs';
 import { findBrowser, openRenderer, isTracker } from './render.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_URL = 'https://github.com/wonseokjung/reversebusiness';
-export const LIMITS = { maxPages: 5, delayMs: 2000, maxDelayMs: 60000, timeoutMs: 15000, maxBytes: 2_000_000, maxRequests: 14, maxRedirects: 3, renderBudgetMs: 75000 };
+export const LIMITS = { maxPages: 5, delayMs: 2000, maxDelayMs: 60000, timeoutMs: 15000, maxBytes: 2_000_000, maxRequests: 14, maxRedirects: 3, renderBudgetMs: 75000, reaInspectMs: 60000, reaBundleMs: 150000, flowClicks: 8 };
 // 받은 HTML 의 글이 이보다 적으면 얇다고 본다.
 export const THIN_CHARS = 1500;
 export const userAgent = (version = '0') => `rebiz/${version} (+${REPO_URL}; reads a few public pages, 2s apart, no login)`;
@@ -352,11 +359,11 @@ export function skeletonFromRects(root, rects) {
 }
 
 // ---------- 모으기 ----------
-export async function collect(input, { version = '0', maxPages = LIMITS.maxPages, fetchImpl, sleep, now, limits, onStep = () => {}, render = 'auto', browser } = {}) {
+export async function collect(input, { version = '0', maxPages = LIMITS.maxPages, fetchImpl, sleep, now, limits, onStep = () => {}, render = 'auto', browser, mode = 'auto', rea, relation = 'third-party', evidenceDir = '', externalRequests = 'allow' } = {}) {
   const start = normalizeUrl(input);
   const f = createFetcher({ version, fetchImpl, sleep, now, limits });
   const pagesMax = Math.min(Math.max(1, maxPages), LIMITS.maxPages);
-  const result = { start: cleanUrl(start.href), origin: start.origin, robots: null, pages: [], skipped: [], stop: null, log: f.log, ua: f.ua, delayMs: f.delay(), pagesMax, render: { mode: render === 'off' ? 'off' : 'not-needed', browser: '', pages: 0, allowed: 0, blocked: 0, why: {} } };
+  const result = { start: cleanUrl(start.href), origin: start.origin, robots: null, pages: [], skipped: [], stop: null, log: f.log, ua: f.ua, delayMs: f.delay(), pagesMax, render: { mode: render === 'off' ? 'off' : 'not-needed', browser: '', pages: 0, allowed: 0, blocked: 0, why: {} }, deep: { mode: 'light', why: '', surface: { state: 'done', note: '' }, flow: { state: 'skipped', note: '' }, code: { state: 'skipped', note: '' } } };
   const robotsCache = new Map();
 
   async function robotsOf(origin) {
@@ -422,6 +429,7 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
   // 받은 HTML 이 얇은지: 스크립트가 있고 글이 적거나, 가격과 누르는 곳이 하나도 안 보일 때.
   const needsRender = (p) => p.counts.scriptTags > 0 && (p.textLength < THIN_CHARS || (!p.prices.length && !p.pay.length && !p.signup.length && p.textLength < THIN_CHARS * 2));
   let renderer = null;
+  let mainTab = null;
   const renderStarted = (now || Date.now)();
   // 브라우저 안에서 나가는 요청마다 같은 선을 적용한다.
   async function allowInBrowser(reqUrl, { isMain }) {
@@ -435,52 +443,145 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
       const rb = robotsCache.get(u.origin) || robotsCache.get(start.origin);
       if (rb && !isAllowed(rb.rules, u.pathname + u.search)) return { ok: false, why: 'robots.txt 금지' };
       if (!isMain && neverOpen(u.pathname)) return { ok: false, why: '로그인이나 결제 주소' };
-      return { ok: true };
+      return { ok: true, sameSite: true };
     }
     if (isTracker(u.hostname)) return { ok: false, why: '분석과 광고 도구' };
+    // externalRequests 'block': 다른 사이트로는 아무 요청도 보내지 않는다 (호스트 이름만 적는다). 시험에서 바깥으로 나가지 않으려고 쓴다.
+    if (externalRequests === 'block') return { ok: false, why: '다른 사이트 자원' };
     return { ok: true };
   }
   // 한 장을 브라우저로 그려 읽는다. 미리 주소와 robots.txt 를 확인하고, 요청 한 번으로 쳐서 간격을 지킨다.
-  async function rendered(u, kind) {
+  // keep 을 주면 탭을 닫지 않고 돌려준다 (정밀 모드에서 같은 탭을 흐름 읽기와 속 읽기에 이어 쓴다).
+  async function rendered(u, kind, { keep = false } = {}) {
     if (neverOpen(u.pathname)) throw new Stop('login-wall', `로그인, 가입, 결제, 계정 화면으로 보이는 주소는 열지 않아요: ${short(u.pathname, 40)}`, { path: u.pathname });
     const rb = await robotsOf(u.origin);
     if (!isAllowed(rb.rules, u.pathname + u.search)) throw new Stop('robots-disallow', `robots.txt 가 이 주소를 막고 있어요: ${u.pathname}. 받지 않고 멈춥니다.`, { path: u.pathname });
     onStep(`그려서 읽기: ${cleanUrl(u.href)}`);
     return f.paced('render', u.href, async (entry) => {
-      let r;
-      try { r = await renderer.render(u.href, { allow: allowInBrowser }); } catch { throw new Stop('render-failed', '브라우저로 그려 읽지 못했어요.'); }
-      entry.status = r.status; entry.bytes = Buffer.byteLength(r.html || ''); entry.browser_requests = r.stats.allowed; entry.browser_blocked = r.stats.blocked;
-      result.render.allowed += r.stats.allowed; result.render.blocked += r.stats.blocked;
-      for (const [k, v] of Object.entries(r.stats.why)) result.render.why[k] = (result.render.why[k] || 0) + v;
-      if (BLOCK_STATUS.has(r.status)) throw new Stop('blocked', `이 주소는 ${r.status} 로 막혀 있어요. 넘지 않고 멈춥니다.`, { status: r.status });
-      if (r.stats.mainBlocked && !r.html) throw new Stop(r.stats.mainBlocked.includes('로그인') ? 'login-wall' : 'offsite-redirect', `페이지가 다른 곳으로 넘기려 해서 따라가지 않았어요 (${r.stats.mainBlocked}).`);
-      let final;
-      try { final = new URL(r.url); } catch { final = u; }
-      if (!/^https?:$/.test(final.protocol) || !sameSite(final, start)) final = u;
-      let p;
-      try { p = readPage(r.html, final.href, { rects: r.blocks }); } catch { throw new Stop('parse-error', '그려진 화면을 읽지 못했어요.'); }
-      if (p.challenge) throw new Stop('challenge', '사람인지 확인하는 화면이 나왔어요. 풀지 않고 멈춥니다.');
-      result.render.pages += 1;
-      return { ...p, kind, status: r.status || 200, headers: {}, truncated: false, rendered: true, browserStats: r.stats, renderTimedOut: r.timedOut };
+      let pg;
+      try { pg = await renderer.open(u.href, { allow: allowInBrowser, keepScripts: keep }); } catch { throw new Stop('render-failed', '브라우저로 그려 읽지 못했어요.'); }
+      let kept = false;
+      try {
+        const r = await pg.read();
+        const st = pg.stats;
+        entry.status = pg.status; entry.bytes = Buffer.byteLength(r.html || ''); entry.browser_requests = st.allowed; entry.browser_blocked = st.blocked;
+        result.render.allowed += st.allowed; result.render.blocked += st.blocked;
+        for (const [k, v] of Object.entries(st.why)) result.render.why[k] = (result.render.why[k] || 0) + v;
+        if (BLOCK_STATUS.has(pg.status)) throw new Stop('blocked', `이 주소는 ${pg.status} 로 막혀 있어요. 넘지 않고 멈춥니다.`, { status: pg.status });
+        if (st.mainBlocked && !r.html) throw new Stop(st.mainBlocked.includes('로그인') ? 'login-wall' : 'offsite-redirect', `페이지가 다른 곳으로 넘기려 해서 따라가지 않았어요 (${st.mainBlocked}).`);
+        let final;
+        try { final = new URL(r.url); } catch { final = u; }
+        if (!/^https?:$/.test(final.protocol) || !sameSite(final, start)) final = u;
+        let p;
+        try { p = readPage(r.html, final.href, { rects: r.blocks }); } catch { throw new Stop('parse-error', '그려진 화면을 읽지 못했어요.'); }
+        if (p.challenge) throw new Stop('challenge', '사람인지 확인하는 화면이 나왔어요. 풀지 않고 멈춥니다.');
+        result.render.pages += 1;
+        for (const h of pg.hosts()) hostsSeen.set(h.host, { host: h.host, count: (hostsSeen.get(h.host)?.count || 0) + h.count, sent: (hostsSeen.get(h.host)?.sent || 0) + h.sent });
+        const out = { ...p, kind, status: pg.status || 200, headers: {}, truncated: false, rendered: true, browserStats: st, renderTimedOut: pg.timedOut };
+        if (keep) { kept = true; Object.defineProperty(out, 'tab', { value: pg, enumerable: false }); }
+        return out;
+      } finally { if (!kept) await pg.close(); }
     });
+  }
+  const hostsSeen = new Map();
+
+  // ---------- 정밀 모드: REA 를 눈으로 쓴다 ----------
+  const reaRun = mode === 'light' ? null : rea !== undefined ? rea : (reaRunner({ allowNpx: false }) || (reaSkillPresent() ? reaRunner() : null));
+  const saveEvidence = (name, text) => { if (!evidenceDir) return ''; try { fs.mkdirSync(evidenceDir, { recursive: true }); fs.writeFileSync(path.join(evidenceDir, name), text); return `evidence/${name}`; } catch { return ''; } };
+  // 겉 읽기: REA 가 같은 탭에 붙어서 글과 구조, 저장소 키 이름을 읽는다. 누르지 않는다.
+  async function reaSurface(tab) {
+    const d = result.deep.surface;
+    if (!renderer.endpoint) { d.note = 'REA 가 붙을 디버깅 주소를 열지 못해 우리 읽기만 썼다'; return; }
+    onStep('겉 읽기: REA inspect-web-page (그려진 화면의 글, 구조, 저장소 키 이름)');
+    const r = await runRea(reaRun, ['inspect-web-page', renderer.endpoint, tab.targetId, '--allowed-origins', start.origin, '--observation-ms', '1000', '--include-accessibility-text', '--include-storage-keys', '--format', 'json'], { timeoutMs: f.limits.reaInspectMs });
+    if (r.code !== 0 || r.timedOut) { d.note = r.timedOut ? 'REA 겉 읽기가 시간 한도를 넘어 우리 읽기만 썼다' : 'REA 겉 읽기가 실패해 우리 읽기만 썼다'; d.rea = 'failed'; return; }
+    try {
+      // 쿠키, 토큰처럼 비밀 값이 실릴 수 있는 칸은 저장하기 전에 버린다.
+      const clean = dropSecrets(JSON.parse(r.stdout));
+      const rec = recordsOf(clean).find((x) => x.operation === 'inspect_web_page');
+      const pg = readInspect(rec);
+      d.rea = 'done';
+      d.file = saveEvidence('01_inspect_page.json', JSON.stringify(clean));
+      d.storage = pg.storage || { local: [], session: [], idb: [], cache: [] };
+      d.scripts = pg.scripts.length;
+      d.biggestScript = pg.scripts.reduce((m, x) => Math.max(m, x.length || 0), 0);
+      d.a11y = { headings: pg.headings.length, buttons: pg.buttons.length, links: pg.links.length, prices: pg.prices.slice(0, 6) };
+    } catch { d.note = 'REA 겉 읽기의 결과를 읽지 못해 우리 읽기만 썼다'; d.rea = 'failed'; }
+  }
+  // 흐름 읽기: 펼치기만 누르고, 펼친 뒤에 새로 보이는 글과 요청이 나가려던 호스트 이름을 모은다.
+  async function flowRead(tab, mainPage) {
+    const d = result.deep.flow;
+    onStep('흐름 읽기: 펼치기만 누릅니다 (자주 묻는 질문, 탭, 더 보기). 폼, 로그인, 결제 단추는 누르지 않습니다');
+    try {
+      const fl = await tab.flow({ max: f.limits.flowClicks });
+      const after = await tab.read();
+      let newLines = [];
+      try { const p2 = readPage(after.html, mainPage.url); const before = new Set(mainPage.lines); newLines = p2.lines.filter((l) => !before.has(l)); } catch { /* 새 글 없음 */ }
+      d.state = 'done';
+      d.clicks = fl.clicks; d.kinds = fl.kinds; d.moved = fl.moved;
+      d.newChars = newLines.join(' ').length;
+      d.newPrices = uniq(newLines.filter((l) => PRICE.test(l)).map((l) => (PRICE.exec(l) || [])[0]).filter(Boolean)).filter((x) => !mainPage.prices.includes(x)).slice(0, 8);
+      d.note = fl.clicks ? '' : '펼칠 곳을 찾지 못해 누른 것은 없다';
+      for (const h of tab.hosts()) hostsSeen.set(h.host, { host: h.host, count: Math.max(hostsSeen.get(h.host)?.count || 0, h.count), sent: Math.max(hostsSeen.get(h.host)?.sent || 0, h.sent) });
+    } catch { d.state = 'failed'; d.note = '흐름 읽기 도중 멈췄다'; }
+  }
+  // 속 읽기: 약관이 막지 않을 때만. 스크립트는 이미 내려온 것만 읽고, 찾은 주소는 부르지 않는다.
+  async function codeRead(tab) {
+    const d = result.deep.code;
+    const terms = result.pages.find((p) => p.kind === 'terms');
+    if (relation !== 'own') {
+      if (!terms) { d.note = '이용약관을 읽지 못해 속 읽기(코드 읽기)는 하지 않았다'; return; }
+      const t = termsForbidCodeReading(terms.lines.join(' '));
+      if (t.forbids) { d.state = 'blocked'; d.note = `이용약관에 코드 분석을 금지하는 말("${t.word}")이 있어 속 읽기는 하지 않았다`; return; }
+      d.termsNote = '이용약관에서 코드 분석을 금지하는 말을 찾지 못했다 (낱말로 찾아본 것이며 법률 검토가 아니다)';
+    }
+    onStep('속 읽기: 이미 내려온 스크립트에서 화면 경로 이름과 결제 모듈 이름을 찾습니다 (찾은 주소는 부르지 않습니다)');
+    let scan = { files: 0, bytes: 0, routes: [], endpoints: [], payments: [], prices: [], plans: [] };
+    try { scan = scanScripts(await tab.scripts()); } catch { /* 스크립트를 못 읽음 */ }
+    let bundle = null;
+    if (renderer.endpoint && evidenceDir) {
+      onStep('속 읽기: REA analyze-web-bundle (큰 스크립트는 시간 한도에서 멈춥니다)');
+      const file = path.join(evidenceDir, '02_bundle_evidence.json');
+      try { fs.mkdirSync(evidenceDir, { recursive: true }); fs.rmSync(file, { force: true }); } catch { /* 폴더 문제는 아래에서 실패로 남는다 */ }
+      const r = await runRea(reaRun, ['analyze-web-bundle', renderer.endpoint, tab.targetId, '--allowed-origins', start.origin, '--detail', 'summary', '--evidence_output', file, '--view', '{"kind":"web-bundle","collection":"summary"}', '--analysis-timeout-ms', '30000', '--total-analysis-timeout-ms', '100000', '--format', 'json'], { timeoutMs: f.limits.reaBundleMs });
+      try {
+        const rec = recordsOf(JSON.parse(fs.readFileSync(file, 'utf8'))).find((x) => x.operation === 'analyze_web_bundle');
+        if (rec) { bundle = readBundleFacts(rec); d.file = 'evidence/02_bundle_evidence.json'; }
+      } catch { /* 결과 파일이 없으면 실패로 남긴다 */ }
+      if (!bundle) d.reaNote = r.timedOut ? 'REA 스크립트 분석이 시간 한도를 넘었다' : 'REA 스크립트 분석이 결과를 내지 못했다';
+    } else d.reaNote = 'REA 가 붙을 디버깅 주소나 저장할 폴더가 없어 REA 스크립트 분석은 하지 않았다';
+    d.rea = bundle ? { scripts: bundle.scripts, parsed: bundle.parsed, status: bundle.status, endpoints: bundle.endpoints } : null;
+    d.routes = uniq([...(bundle ? bundle.routes : []), ...scan.routes]).sort();
+    d.endpoints = scan.endpoints; d.payments = scan.payments; d.prices = scan.prices; d.plans = scan.plans; d.files = scan.files; d.bytes = scan.bytes;
+    if (!bundle && !scan.files) { d.state = 'failed'; d.note = '스크립트를 읽지 못했다'; return; }
+    d.state = bundle && bundle.scripts > bundle.parsed ? 'partial' : 'done';
+    d.note = bundle && bundle.scripts > bundle.parsed ? `스크립트 ${bundle.scripts}개 가운데 ${bundle.scripts - bundle.parsed}개는 REA 분석이 끝나지 않았다` : (d.reaNote || '');
   }
 
   try {
     let main = await page(start, 'main');
     result.pages.push(main);
-    if (render !== 'off' && (render === 'force' || needsRender(main))) {
-      const found = browser === undefined ? findBrowser() : browser;
+    const found = render === 'off' ? null : browser === undefined ? findBrowser() : browser;
+    const precise = !!reaRun && !!found;
+    result.deep.why = mode === 'light' ? '가벼운 모드로 실행했다 (--light)' : !reaRun ? 'REA 를 찾지 못해 가벼운 모드로 읽었다' : !found ? (render === 'off' ? '그려 읽기를 꺼 두어 가벼운 모드로 읽었다' : 'Chrome 계열 브라우저가 없어 가벼운 모드로 읽었다') : '';
+    if (render !== 'off' && (render === 'force' || precise || needsRender(main))) {
       if (!found) result.render.mode = 'unavailable';
       else {
         try {
-          onStep(`받은 HTML 의 글이 ${main.textLength}자로 얇아요. ${found.name} 을(를) 임시 프로필로 잠깐 띄워 그려진 화면을 읽습니다.`);
-          renderer = await openRenderer({ browser: found, version, repo: REPO_URL });
+          onStep(precise ? `정밀 모드: REA 를 찾았습니다. ${found.name} 을(를) 임시 프로필로 잠깐 띄워 세 깊이로 읽습니다.` : `받은 HTML 의 글이 ${main.textLength}자로 얇아요. ${found.name} 을(를) 임시 프로필로 잠깐 띄워 그려진 화면을 읽습니다.`);
+          renderer = await openRenderer({ browser: found, version, repo: REPO_URL, debugPort: precise });
           result.render.browser = found.name;
-          const drawn = await rendered(new URL(main.url), 'main');
+          const drawn = await rendered(new URL(main.url), 'main', { keep: precise });
           drawn.plainTextLength = main.textLength;
           drawn.headers = main.headers;
+          if (precise) {
+            mainTab = drawn.tab;
+            result.deep.mode = 'precise';
+            await reaSurface(mainTab);
+            await flowRead(mainTab, drawn);
+          }
           // 그려 읽은 쪽에 글이 더 많을 때만 그것으로 바꾼다.
-          if (drawn.textLength > main.textLength) { main = drawn; result.pages[0] = drawn; result.render.mode = 'used'; } else result.render.mode = 'no-gain';
+          if (drawn.textLength > main.textLength || precise) { main = drawn; result.pages[0] = drawn; result.render.mode = 'used'; } else result.render.mode = 'no-gain';
         } catch (e) {
           if (e instanceof Stop && HARD_STOP.has(e.code)) throw e;
           result.render.mode = 'failed';
@@ -509,10 +610,21 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
         if (HARD_STOP.has(e.code)) { result.stop = { code: e.code, message: e.message }; break; }
       }
     }
+    // 약관까지 읽은 다음에야 속 읽기를 할지 정한다.
+    if (mainTab && result.deep.mode === 'precise' && !result.stop) await codeRead(mainTab);
   } catch (e) {
     if (!(e instanceof Stop)) throw e;
     result.stop = { code: e.code, message: e.message };
   } finally {
+    result.deep.hosts = [...hostsSeen.values()];
+    if (result.deep.mode === 'precise') {
+      // 근거로 남기는 것은 호스트 이름과 누른 종류, 코드에서 찾은 짧은 이름뿐이다. 본문, 쿠키, 스크립트 글은 남기지 않는다.
+      const fl = result.deep.flow;
+      if (fl.state === 'done') fl.file = saveEvidence('03_flow.json', `${JSON.stringify({ clicks: fl.clicks, kinds: fl.kinds, moved: fl.moved, hosts: result.deep.hosts.map((h) => ({ host: h.host, requests: h.count, sent: h.sent })) }, null, 2)}\n`) || 'evidence/03_flow.json';
+      const cd = result.deep.code;
+      if (['done', 'partial'].includes(cd.state)) cd.scanFile = saveEvidence('04_code_scan.json', `${JSON.stringify({ files: cd.files, bytes: cd.bytes, routes: cd.routes, endpoints: cd.endpoints, payments: cd.payments, prices: cd.prices, plans: cd.plans }, null, 2)}\n`) || 'evidence/04_code_scan.json';
+    }
+    if (mainTab) { try { await mainTab.close(); } catch { /* 닫는 중 오류는 넘어간다 */ } }
     if (renderer) { try { result.render.closed = await renderer.close(); } catch { /* 닫는 중 오류는 넘어간다 */ } }
   }
   result.delayMs = f.delay();
@@ -526,13 +638,24 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   if (!main) throw new Error('읽은 페이지가 없어요');
   const host = new URL(main.url).hostname;
   const evidence = [];
-  const add = (type, ref, note) => { const id = `E${evidence.length + 1}`; evidence.push({ id, type, ref, note, seen_at: today }); return id; };
+  const add = (type, ref, note, seen) => { const id = `E${evidence.length + 1}`; evidence.push({ id, type, ref, note, seen_at: today, ...(seen ? { seen } : {}) }); return id; };
   const ev = new Map();
   for (const p of c.pages) ev.set(p, add('url', p.url, p.rendered
     ? `${PAGE_LABEL[p.kind] || '페이지'}. 헤드리스 브라우저(임시 프로필)로 한 번 열어 그려진 화면의 글자와 구조, 구역의 위치를 읽음 (응답 ${p.status}, 글자 ${p.textLength}자). 누르기와 입력 없음, 화면 캡처 없음`
     : `${PAGE_LABEL[p.kind] || '페이지'}. 공개 HTML 을 한 번 받아 글자와 구조만 읽음 (응답 ${p.status}, 글자 ${p.textLength}자${p.truncated ? ', 크기 한도에서 잘림' : ''}). 스크립트는 실행하지 않음`));
   const E = ev.get(main);
   const R = c.robots ? add('url', c.robots.url, c.robots.found ? `robots.txt. 따른 규칙: Allow ${c.robots.allow.join(' ') || '없음'}, Disallow ${c.robots.disallow.slice(0, 8).join(' ') || '없음'}${c.robots.delay != null ? `, Crawl-delay ${c.robots.delay}` : ''}` : `robots.txt 자리에 규칙이 없음 (응답 ${c.robots.status})`) : null;
+  // 정밀 모드에서 얻은 것: 흐름에서 본 것과 코드에서 본 것은 근거를 따로 둔다.
+  const dp = c.deep || { mode: 'light', why: '', surface: { state: 'done' }, flow: { state: 'skipped' }, code: { state: 'skipped' }, hosts: [] };
+  const precise = dp.mode === 'precise';
+  const flowDone = precise && dp.flow.state === 'done';
+  const codeDone = precise && ['done', 'partial'].includes(dp.code.state);
+  const kindWord = { tab: '탭', details: '접힌 글', expand: '펼침 단추', more: '더 보기' };
+  const clicksText = flowDone && dp.flow.clicks ? `펼치기 ${dp.flow.clicks}번 (${Object.entries(dp.flow.kinds).map(([k, v]) => `${kindWord[k] || k} ${v}`).join(', ')})` : '누른 것 없음';
+  const F = flowDone ? add('doc', dp.flow.file || 'evidence/03_flow.json', `흐름 읽기 기록. ${clicksText}. 폼, 로그인, 가입, 결제, 구매 단추는 누르지 않음. 페이지가 요청을 보내려던 호스트 이름 ${(dp.hosts || []).length}개 (본문, 쿠키, 토큰은 남기지 않음)`, 'flow') : null;
+  const C = codeDone ? add('doc', dp.code.file || dp.code.scanFile || 'evidence/04_code_scan.json', `속 읽기 기록. 이미 내려온 스크립트 ${dp.code.files || (dp.code.rea ? dp.code.rea.scripts : 0)}개에서 이름만 찾음${dp.code.rea ? ` (REA analyze-web-bundle: ${dp.code.rea.scripts}개 가운데 ${dp.code.rea.parsed}개 분석)` : ''}. 찾은 주소는 하나도 부르지 않음`, 'code') : null;
+  const code = (text, ...e) => ({ text, status: 'code', evidence: e.filter(Boolean) });
+  const services = precise ? classifyHosts(dp.hosts || [], host) : [];
   const obs = (text, ...e) => ({ text, status: 'observed', evidence: e.filter(Boolean) });
   const inf = (text, ...e) => ({ text, status: 'inferred', evidence: e.filter(Boolean) });
   const unk = (text) => ({ text, status: 'unknown', evidence: [] });
@@ -556,6 +679,14 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   for (const p of all) {
     if (p.prices.length) price.push(obs(`${PAGE_LABEL[p.kind] || '페이지'}에 가격 모양의 글자가 보인다: ${p.prices.slice(0, 5).map((x) => q(x, 24)).join(', ')} (${seenOn}).`, ev.get(p)));
     for (const j of p.ld) for (const o of j.offers) price.push(obs(`HTML 의 JSON-LD(${short(j.type, 30)})에 가격 ${o.price} ${o.currency} 이 적혀 있다 (${seenOn}).`, ev.get(p)));
+  }
+  if (flowDone && (dp.flow.newPrices || []).length) price.push(obs(`펼친 뒤에 가격 모양의 글자가 더 보인다: ${dp.flow.newPrices.slice(0, 5).map((x) => q(x, 24)).join(', ')} (${seenOn}).`, F));
+  if (codeDone) {
+    // 화면에서 이미 본 값과 숫자가 같은 것은 빼고, 코드에서만 보이는 것만 흔적으로 적는다.
+    const digits = (x) => String(x).replace(/\D/g, '');
+    const onScreen = new Set([...all.flatMap((p) => p.prices), ...(dp.flow.newPrices || [])].map(digits));
+    const only = (dp.code.prices || []).filter((x) => !onScreen.has(digits(x)));
+    if (only.length) price.push(code(`코드 안에 가격처럼 보이는 숫자나 글자가 있다: ${only.slice(0, 6).map((x) => q(x, 20)).join(', ')}. 화면에서는 보지 못했으므로 지금 파는 가격인지는 모른다.`, C));
   }
   if (!price.length) price.push(unk('받은 페이지에서 가격 모양의 글자를 찾지 못했다. 다른 곳에 있는지, 스크립트로 그려지는지는 모른다.'));
 
@@ -594,6 +725,17 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
     status: 'observed', evidence: [ev.get(p)],
   }));
 
+  // 코드에서만 이름이 보인 화면: 링크로 보이지도 않고 읽지도 않은 경로. 열어 보지 않는다.
+  let codeOnlyRoutes = [];
+  if (codeDone) {
+    const shown = new Set([...all.map((p) => new URL(p.url).pathname), ...all.flatMap((p) => p.links.filter((l) => l.same).map((l) => l.path))]);
+    codeOnlyRoutes = (dp.code.routes || []).filter((r) => r !== '/' && !shown.has(r) && !shown.has(`${r}/`));
+    // 로그인이나 결제 뒤로 보이는 경로를 앞에 둔다.
+    const behind = (r) => (looksBehindLogin(r) || neverOpen(r) || /(payment|player|checkout|admin)/i.test(r) ? 1 : 0);
+    codeOnlyRoutes.sort((x, y) => behind(y) - behind(x) || x.localeCompare(y));
+    for (const r of codeOnlyRoutes.slice(0, 14)) screens.push({ name: short(r, 48), purpose: looksBehindLogin(r) || neverOpen(r) ? '코드에서만 이름이 보인 화면. 로그인이나 결제 뒤로 보이는 경로다. 열어 보지 않았다.' : '코드에서만 이름이 보인 화면. 어디서 이어지는지 화면에서는 보지 못했다. 열어 보지 않았다.', features: [], status: 'code', evidence: [C] });
+  }
+
   // 4. 기술
   const tech = [];
   if (main.counts.script) tech.push({ layer: '스크립트', ...obs(`첫 페이지가 스크립트 파일 ${main.counts.script}개를 부른다. 부르는 곳: ${main.scriptHosts.slice(0, 6).map((h) => (h === host ? '같은 주소' : h)).join(', ') || '같은 주소'}.`, E) });
@@ -606,6 +748,23 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   if (drawn) tech.push({ layer: '그리는 방식', ...obs(`스크립트를 실행하지 않고 받은 HTML 의 글은 ${htmlChars}자였고, 브라우저가 그린 뒤에는 ${chars}자다. 화면을 브라우저에서 스크립트로 그리는 페이지다.`, E) });
   else if (thin && main.counts.scriptTags > 0) tech.push({ layer: '그리는 방식', ...unk(`받은 HTML 의 글이 ${chars}자로 적다. ${whyNotDrawn}. 스크립트가 화면에 무엇을 더 그리는지는 모른다.`) });
   if (drawn && rs.blocked) tech.push({ layer: '브라우저 안에서 거른 요청', ...obs(`그려 읽는 동안 페이지가 보내려던 요청 가운데 ${rs.blocked}개는 보내지 않았다 (${Object.entries(rs.why).map(([k, v]) => `${k} ${v}`).join(', ')}). 그 응답으로 그려지는 부분은 화면에 없을 수 있다.`, E) });
+  if (precise && dp.surface.storage) {
+    const st = dp.surface.storage;
+    const parts = [st.local.length ? `localStorage 키 이름 ${st.local.length}개` : '', st.session.length ? `sessionStorage 키 이름 ${st.session.length}개` : '', st.idb.length ? `IndexedDB 이름 ${st.idb.length}개 (${st.idb.slice(0, 3).map((x) => short(x, 28)).join(', ')})` : ''].filter(Boolean);
+    if (parts.length) tech.push({ layer: '브라우저 저장소', ...obs(`${parts.join(', ')}. 값은 읽지 않았다.`, E) });
+  }
+  if (flowDone) {
+    const named = services.filter((x) => x.kind !== 'other');
+    const others = services.filter((x) => x.kind === 'other');
+    if (services.length) tech.push({ layer: '바깥 서비스', ...obs(`페이지가 요청을 보내려던 바깥 호스트 ${services.reduce((n, x) => n + x.hosts.length, 0)}곳${named.length ? `: ${named.slice(0, 10).map((x) => `${SERVICE_KINDS[x.kind]} ${x.name}`).join(', ')}` : ''}${others.length ? `${named.length ? ', 그 밖 ' : ': 그 밖 '}${others.length}곳` : ''}. 호스트 이름만 적었고 주고받은 내용은 보지 않았다.`, F) });
+  }
+  if (codeDone) {
+    if ((dp.code.payments || []).length) tech.push({ layer: '결제 모듈', ...code(`코드 안에 결제 모듈 이름이 보인다: ${dp.code.payments.join(', ')}. 실제로 그 결제사로 결제되는지는 결제 화면을 열지 않아 모른다.`, C) });
+    if ((dp.code.routes || []).length) tech.push({ layer: '화면 경로', ...code(`코드 안에 화면 경로 이름이 ${dp.code.routes.length}개 있다. 이 가운데 ${codeOnlyRoutes.length}개는 화면에서 링크로 보이지 않았다${codeOnlyRoutes.length ? ` (예: ${codeOnlyRoutes.slice(0, 5).map((x) => short(x, 24)).join(', ')})` : ''}. 하나도 열어 보지 않았다.`, C) });
+    if ((dp.code.endpoints || []).length) tech.push({ layer: '서버 호출 이름', ...code(`코드 안에 서버 호출 주소처럼 보이는 이름이 ${dp.code.endpoints.length}개 있다 (예: ${dp.code.endpoints.slice(0, 4).map((x) => short(x, 28)).join(', ')}). 하나도 불러 보지 않았다.`, C) });
+    if ((dp.code.plans || []).length) tech.push({ layer: '요금제 이름', ...code(`코드 안에 요금제나 상품 이름처럼 보이는 글자가 있다: ${dp.code.plans.slice(0, 6).map((x) => q(x, 20)).join(', ')}. 지금 파는 것인지는 화면에서 확인되지 않았다.`, C) });
+    if (dp.code.state === 'partial') tech.push({ layer: '읽지 못한 스크립트', ...unk(`${dp.code.note}. 그 안의 경로와 이름은 모른다.`) });
+  }
   tech.push({ layer: '서버', ...unk('서버, 데이터 저장소, 결제 연동은 밖에서 보이지 않는다.') });
 
   // 5. 모르는 것
@@ -617,18 +776,33 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   ];
   if (thin && !drawn) unknowns.push({ question: '스크립트로 그려지는 화면의 내용', why: `${whyNotDrawn}.`, next: nextStep });
   if (thin && drawn) unknowns.push({ question: '그려진 화면에도 글이 적은 까닭', why: `브라우저로 그린 뒤에도 글이 ${chars}자뿐이다.`, next: nextStep });
+  if (precise && !codeDone) unknowns.push({ question: '코드 안에 있는 화면 경로와 결제 모듈 이름', why: `${dp.code.note || '속 읽기를 하지 않았다'}.`, next: dp.code.state === 'blocked' ? '약관이 막고 있으므로 하지 않는다. 화면과 흐름에서 본 것만으로 정리한다.' : relation === 'own' ? '다시 실행해 본다.' : '이용약관을 사람이 직접 읽어 코드 분석을 금지하는지 확인한 뒤에 정한다. 내 것이면 --own 을 붙인다.' });
   for (const s of c.skipped) unknowns.push({ question: `받지 않은 페이지: ${short(s.url, 60)}`, why: short(s.why, 120), next: '필요하면 사람이 직접 연다.' });
 
   const termsPage = all.find((p) => p.kind === 'terms');
+  // 흐름과 코드에서 본 바깥 서비스. 이름만 적는다.
+  const serviceList = [
+    ...['payment', 'analytics', 'video', 'auth', 'data', 'chat'].map((k) => ({ kind: k, label: SERVICE_KINDS[k], names: services.filter((x) => x.kind === k).map((x) => x.name), seen: 'flow', evidence: [F].filter(Boolean) })).filter((x) => x.names.length && F),
+    ...(codeDone ? [{ kind: 'payment', label: SERVICE_KINDS.payment, names: (dp.code.payments || []).filter((n) => !services.some((x) => x.kind === 'payment' && x.name === n)), seen: 'code', evidence: [C] }].filter((x) => x.names.length) : []),
+  ];
   const report = {
     schema: 'rebiz/report@1',
     meta: {
       target: { name: short(main.title, 80) || host, kind: 'web-service', url: main.url, relation },
       analyzed_at: today,
-      analyst: `rebiz ${version} 가벼운 수집기 (자동 초안, 해석 없음)`,
+      analyst: precise ? `rebiz ${version} 정밀 모드 (REA 로 읽은 자동 초안, 해석 없음)` : `rebiz ${version} 가벼운 수집기 (자동 초안, 해석 없음)`,
+      depth: {
+        mode: precise ? 'precise' : 'light',
+        reached: codeDone ? 'code' : flowDone ? 'flow' : 'surface',
+        steps: [
+          { key: 'surface', state: 'done', note: precise ? (dp.surface.rea === 'done' ? `그려진 화면의 글과 구조를 읽음 (REA inspect-web-page, 글자 ${chars}자)` : `${dp.surface.note || 'REA 겉 읽기 없이 우리 읽기만 씀'} (글자 ${chars}자)`) : `${drawn ? '브라우저가 그린 화면을 읽음' : '받은 HTML 만 읽음'} (글자 ${chars}자)` },
+          { key: 'flow', state: precise ? dp.flow.state : 'skipped', note: flowDone ? `${clicksText}, 바깥 호스트 ${services.reduce((n, x) => n + x.hosts.length, 0)}곳${dp.flow.moved ? '. 누른 뒤 다른 화면으로 넘어가서 거기서 멈춤' : ''}` : precise ? (dp.flow.note || '흐름 읽기를 하지 못했다') : (dp.why || 'REA 를 찾지 못해 가벼운 모드로 읽었다') },
+          { key: 'code', state: precise ? dp.code.state : 'skipped', note: codeDone ? `화면 경로 이름 ${(dp.code.routes || []).length}개 (코드에서만 ${codeOnlyRoutes.length}개), 결제 모듈 이름 ${(dp.code.payments || []).length}개${dp.code.state === 'partial' ? `. ${dp.code.note}` : ''}${dp.code.termsNote ? `. ${dp.code.termsNote}` : ''}` : precise ? (dp.code.note || '속 읽기를 하지 않았다') : (dp.why || 'REA 를 찾지 못해 가벼운 모드로 읽었다') },
+        ],
+      },
       read: { mode: drawn ? 'rendered' : 'html', chars, html_chars: htmlChars, thin, ...(thin ? { note: `읽은 글이 ${chars}자뿐이라 모름이 많다. ${drawn ? '브라우저로 그려 읽은 결과다' : whyNotDrawn}.`, next: nextStep } : {}) },
       scope: `공개 페이지 ${all.length}장을 읽었다 (요청 ${c.log.length}번, 요청 사이 ${Math.round(c.delayMs / 100) / 10}초 이상). ${rs.pages ? `받은 HTML 의 글이 얇아 ${rs.pages}장은 헤드리스 브라우저(${rs.browser}, 임시 프로필)로 한 번씩 열어 그려진 화면을 읽었다. 누르기, 입력, 화면 캡처는 하지 않았고, 브라우저 안에서 GET 이 아닌 요청, robots.txt 가 막은 주소, 분석 도구는 보내지 않았다. ` : '스크립트를 실행하지 않았다. '}로그인, 가입, 결제, 폼 제출을 하지 않았고, 쿠키를 저장하지 않았다.`,
-      method: uniq(['robots.txt 를 먼저 확인', '공개 HTML 을 GET 으로 받기 (스크립트 실행 없음)', rs.pages ? `그려진 화면 읽기: 헤드리스 ${rs.browser}, 임시 프로필, 끝나면 브라우저를 끄고 프로필 삭제` : '', `읽은 것: ${all.map((p) => PAGE_LABEL[p.kind] || '페이지').join(', ')}`, 'collect.mjs 로 초안 만들기'].filter(Boolean)),
+      method: uniq(['robots.txt 를 먼저 확인', '공개 HTML 을 GET 으로 받기 (스크립트 실행 없음)', precise && dp.surface.rea === 'done' ? 'REA inspect-web-page (겉 읽기: 글, 구조, 저장소 키 이름. 값은 읽지 않음)' : '', flowDone ? '흐름 읽기: 펼치기만 누르고 요청 호스트 이름만 모음' : '', codeDone ? `속 읽기: 이미 내려온 스크립트에서 이름만 찾음${dp.code.rea ? ' (REA analyze-web-bundle)' : ''}. 찾은 주소는 부르지 않음` : '', rs.pages ? `그려진 화면 읽기: 헤드리스 ${rs.browser}, 임시 프로필, 끝나면 브라우저를 끄고 프로필 삭제` : '', `읽은 것: ${all.map((p) => PAGE_LABEL[p.kind] || '페이지').join(', ')}`, 'collect.mjs 로 초안 만들기'].filter(Boolean)),
       terms: {
         // checked 는 약관 조항까지 사람이 읽었을 때만 쓴다. 자동 초안은 거기까지 가지 않는다.
         status: relation === 'own' ? 'not-applicable' : (termsPage || (c.robots && c.robots.found)) ? 'robots-only' : 'not-found',
@@ -646,7 +820,7 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
         price,
         revenue: [],
       },
-      flow: { steps },
+      flow: { steps, ...(serviceList.length ? { services: serviceList } : {}) },
       map: { screens },
       tech: { items: tech },
       unknowns,

@@ -5,7 +5,7 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 
 # reversebusiness: 사업 해부
 
-**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page, with no clicks or input. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs.
+**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page. When REA is installed it switches to a precise mode with three depths: surface (drawn text and structure), flow (expanding clicks only, plus the host names the page tried to contact) and code (names found in already downloaded scripts, skipped when the terms forbid code analysis). Addresses found in code are never called, and anything seen only in code is recorded as a code trace, never as observed. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs.
 
 ## 지켜야 할 선 (먼저 읽고, 어기는 요청은 거절한다)
 
@@ -47,7 +47,7 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 
 리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 검사기를 다시 돌린다. 리포트를 고치려고 따로 스크립트를 만들어 돌리지 않는다.
 
-가장 빠른 시작: `node "<이 스킬 폴더>/tools/collect.mjs" <주소>` 로 초안을 만들고(아래 "가벼운 수집기"), 3단계부터 이어서 채운다. 사용자가 이미 `rebiz <주소>` 로 만든 `report.json` 을 주면 그 파일에서 3단계부터 시작한다.
+가장 빠른 시작: `node "<이 스킬 폴더>/tools/collect.mjs" <주소>` 로 초안을 만들고(아래 "수집기로 읽기"), 3단계부터 이어서 채운다. REA 가 깔려 있으면 수집기가 저절로 정밀 모드(겉, 흐름, 속)로 읽는다. 사용자가 이미 `rebiz <주소>` 로 만든 `report.json` 을 주면 그 파일에서 3단계부터 시작한다.
 
 ### 1단계. 범위와 선 긋기
 
@@ -58,14 +58,44 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 ### 2단계. 근거 장부 만들기
 
 - 본 것마다 근거를 하나씩 등록한다: `id`(E1, E2 ...), `type`, `ref`, `note`, `seen_at`.
+- 어디서 봤는지를 `seen` 에 적는다: `page`(화면에서 봄, 기본), `flow`(흐름에서 봄: 펼친 뒤의 화면이나 요청이 나간 호스트), `code`(코드에서 봄: 내려온 스크립트 안). 코드에서만 본 것은 관찰이 될 수 없다(3단계의 상태 표기).
 - `type` 은 다섯 가지: `url`(공개 주소), `screen`(화면 캡처 파일), `doc`(공개 문서나 내 문서), `file`(소스 파일, 내 것일 때만), `run`(직접 실행해서 본 것, 내 것이거나 공개 무료 기능일 때만).
 - 캡처는 내 폴더에 두고 경로만 적는다. 남의 화면 캡처를 리포트 밖으로 퍼뜨리지 않는다.
 - "찾아봤는데 없었다"도 근거다. 어디를 어떻게 찾아봤는지 범위를 적는다. 없다고 확인된 것이 아니라 그 범위에서 못 찾은 것이다.
 - 모은 원본 자료(캡처, 받아 둔 HTML, REA Evidence, 원본 글 묶음)는 `evidence/` 같은 폴더 하나에 두고 저장소나 공개 장소에 올리지 않는다. 리포트에는 내 말로 쓴 문장과 경로만 들어간다.
 
-#### REA 가 있으면
+#### 수집기로 읽기 (`tools/collect.mjs`): 가장 먼저 쓰는 길
 
-REA 는 이 스킬과 별개의 도구다(MIT, 공식 저장소에서만 받는다). 이 스킬은 REA 위에서 쓰는 별개의 도구이고, REA 를 설치하거나 설정을 바꾸지 않는다. REA 로 읽으면 브라우저가 그린 화면의 글자까지 읽을 수 있어 가벼운 수집기보다 정밀하다. `rea --version` 이 되면 아래 순서로 근거를 모은다. 명령의 정확한 인자는 `rea <명령> --help` 로 확인한다.
+```bash
+node "<이 스킬 폴더>/tools/collect.mjs" <주소> --out ./rebiz-out
+```
+
+- 내 것이면 `--own` 을 붙인다. 읽는 한도는 같고, 리포트에 내 것으로 적히며, 속 읽기를 할 수 있다.
+- **정밀 모드 (REA 가 있을 때 저절로 켜진다. `--light` 로 끈다).** 수집기가 임시 프로필의 헤드리스 브라우저를 띄우고 REA 를 눈으로 써서 세 깊이로 읽는다. 순서는 언제나 robots.txt, 받은 HTML, 그다음에야 브라우저다.
+
+  | 깊이 | 하는 일 | 리포트에 남는 것 |
+  |---|---|---|
+  | 겉 읽기 | 그려진 화면의 글과 구조 (REA inspect-web-page) | 관찰. 저장소는 키 이름만, 값은 읽지 않는다 |
+  | 흐름 읽기 | 펼치기만 누른다(가격 탭, 자주 묻는 질문, 더 보기, 최대 8번). 페이지가 요청을 보내려던 호스트 이름을 모은다 | 관찰이고 근거에 `seen: flow`. 결제사, 분석 도구, 영상 호스팅의 이름이 `flow.services` 에 들어간다 |
+  | 속 읽기 | 이미 내려온 스크립트를 실행 없이 읽는다 (REA analyze-web-bundle 과 이름 찾기) | **코드 흔적**(`status: code`, 근거에 `seen: code`). 화면 경로 이름, 결제 모듈 이름, 가격처럼 보이는 글자 |
+
+  - 흐름 읽기에서 폼 제출, 로그인, 가입, 결제, 구매 단추와 다른 페이지로 가는 링크는 누르지 않는다. 주고받은 내용, 쿠키, 토큰은 남기지 않는다.
+  - 속 읽기는 약관이 서비스 코드 분석을 금지하면 하지 않는다. 약관을 읽지 못했을 때도 하지 않는다(내 것이면 한다). 하지 않았으면 `meta.depth` 에 까닭이 적힌다. 에이전트가 다른 방법으로 대신 읽지 않는다.
+  - **찾은 주소는 절대 부르지 않는다.** 코드에서 찾은 화면 경로와 서버 호출 주소는 이름만 적는다. 열어 보거나 요청을 보내 확인하지 않는다.
+  - 어느 단계가 실패하거나 시간 한도를 넘으면 수집기가 건너뛰고 `meta.depth` 에 "이 단계는 못 읽음"과 까닭을 남긴다. 그대로 두고 3단계로 간다.
+  - 근거 원본은 결과 폴더의 `evidence/` 에 남는다(REA 기록, 호스트 이름과 누른 종류, 코드에서 찾은 이름). 스크립트의 글과 쿠키 값은 남기지 않는다. 이 폴더는 올리지 않는다.
+- 하는 일: robots.txt 를 먼저 받고, 허용된 경우에만 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장을 읽는다. 요청 사이 2초 이상(robots.txt 의 Crawl-delay 가 더 길면 그 값, 60초보다 길면 멈춤).
+- 그려진 화면 읽기: 요즘 사이트는 화면을 스크립트로 그려서, 받은 HTML 에 글이 거의 없는 경우가 많다. 받은 글이 얇으면(1,500자 미만이거나 가격과 누르는 곳이 하나도 안 보일 때) 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 **임시 프로필의 헤드리스 창**으로 잠깐 띄워 그려진 화면을 한 번 읽는다. 누르기, 입력, 화면 캡처는 없다. 브라우저 안에서 나가는 요청도 같은 선으로 거른다(GET 이 아닌 요청, robots.txt 가 막은 주소, 로그인과 결제 주소, 분석 도구는 보내지 않는다). 끝나면 브라우저를 끄고 임시 프로필을 지운다. 구역의 뼈대도 이때 실제 위치와 길이로 잰다. `--no-render` 로 끌 수 있다.
+- 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나온다. 그때는 REA 가 있으면 위의 "REA 가 있으면" 순서로 읽고, 없으면 사용자가 직접 본 화면의 메모를 받아 채운다.
+- 하지 않는 일: 로그인, 가입, 결제, 폼 제출, 쿠키 저장. 로그인이나 결제로 가는 링크는 열지 않는다. 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춘다(종료 코드 3). 멈추면 다른 방법으로 돌아 들어가지 말고 사용자에게 알린다.
+- 나오는 것: `report.json`(본 것만 관찰, 나머지는 모름인 초안), `source.json`(겹침 검사용 원본 글 묶음, 올리지 않는다), `requests.json`(보낸 요청 기록).
+- 초안에는 `skeleton`(구역의 뼈대)이 채워져 있다. 그려 읽었으면 길이는 잰 값이고, 아니면 어림이다. 층 이름은 어느 쪽이든 규칙으로 붙인 추정이므로 3단계에서 직접 보고 고친다.
+- 초안의 `meta.read` 에 읽은 방식과 글자 수가 적힌다. `thin` 이 true 면 화면 맨 위에 알림이 뜬다. 에이전트가 화면을 직접 보고 칸을 채웠으면 `meta.read.thin` 을 false 로 고친다.
+- 도구를 쓸 수 없으면 `report.template.json` 을 복사해 처음부터 채운다. 한도, 약관 확인, 가리기 규칙은 똑같다.
+
+#### REA 를 직접 돌릴 때 (수집기의 정밀 모드를 쓸 수 없을 때만)
+
+REA 는 이 스킬과 별개의 도구다(MIT, 공식 저장소에서만 받는다). 이 스킬은 REA 위에서 쓰는 별개의 도구이고, REA 를 설치하거나 설정을 바꾸지 않는다. REA 로 읽으면 브라우저가 그린 화면의 글자까지 읽을 수 있어 가벼운 수집기보다 정밀하다. 보통은 위의 수집기가 REA 를 대신 불러 준다. 수집기를 쓸 수 없고 `rea --version` 이 될 때만 아래 순서로 직접 근거를 모은다. 명령의 정확한 인자는 `rea <명령> --help` 로 확인한다.
 
 1. robots.txt 를 한 번 받는다. 이용약관 주소를 알면 그것부터 읽는다.
 2. 임시 프로필의 별도 브라우저를 띄운다. 평소 쓰는 브라우저 프로필과 쿠키는 쓰지 않는다. 디버깅 포트는 127.0.0.1 에서만 연다.
@@ -97,22 +127,6 @@ REA 는 이 스킬과 별개의 도구다(MIT, 공식 저장소에서만 받는�
 5. 다 읽었으면 대상 탭을 닫고, 내가 띄운 브라우저만 `kill $(cat chrome.pid)` 로 끈다.
 6. 근거에서 초안을 만든다 (아래 `from-rea.mjs`). 초안은 본 것만 관찰로 옮기고, 3단계부터는 사람이 읽고 채운다.
 
-#### REA 가 없으면: 가벼운 수집기 (`tools/collect.mjs`)
-
-```bash
-node "<이 스킬 폴더>/tools/collect.mjs" <주소> --out ./rebiz-out
-```
-
-- 내 것이면 `--own` 을 붙인다. 읽는 방식과 한도는 같고, 리포트에 내 것으로 적힌다.
-- 하는 일: robots.txt 를 먼저 받고, 허용된 경우에만 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장을 읽는다. 요청 사이 2초 이상(robots.txt 의 Crawl-delay 가 더 길면 그 값, 60초보다 길면 멈춤).
-- 그려진 화면 읽기: 요즘 사이트는 화면을 스크립트로 그려서, 받은 HTML 에 글이 거의 없는 경우가 많다. 받은 글이 얇으면(1,500자 미만이거나 가격과 누르는 곳이 하나도 안 보일 때) 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 **임시 프로필의 헤드리스 창**으로 잠깐 띄워 그려진 화면을 한 번 읽는다. 누르기, 입력, 화면 캡처는 없다. 브라우저 안에서 나가는 요청도 같은 선으로 거른다(GET 이 아닌 요청, robots.txt 가 막은 주소, 로그인과 결제 주소, 분석 도구는 보내지 않는다). 끝나면 브라우저를 끄고 임시 프로필을 지운다. 구역의 뼈대도 이때 실제 위치와 길이로 잰다. `--no-render` 로 끌 수 있다.
-- 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나온다. 그때는 REA 가 있으면 위의 "REA 가 있으면" 순서로 읽고, 없으면 사용자가 직접 본 화면의 메모를 받아 채운다.
-- 하지 않는 일: 로그인, 가입, 결제, 폼 제출, 쿠키 저장. 로그인이나 결제로 가는 링크는 열지 않는다. 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춘다(종료 코드 3). 멈추면 다른 방법으로 돌아 들어가지 말고 사용자에게 알린다.
-- 나오는 것: `report.json`(본 것만 관찰, 나머지는 모름인 초안), `source.json`(겹침 검사용 원본 글 묶음, 올리지 않는다), `requests.json`(보낸 요청 기록).
-- 초안에는 `skeleton`(구역의 뼈대)이 채워져 있다. 그려 읽었으면 길이는 잰 값이고, 아니면 어림이다. 층 이름은 어느 쪽이든 규칙으로 붙인 추정이므로 3단계에서 직접 보고 고친다.
-- 초안의 `meta.read` 에 읽은 방식과 글자 수가 적힌다. `thin` 이 true 면 화면 맨 위에 알림이 뜬다. 에이전트가 화면을 직접 보고 칸을 채웠으면 `meta.read.thin` 을 false 로 고친다.
-- 도구를 쓸 수 없으면 `report.template.json` 을 복사해 처음부터 채운다. 한도, 약관 확인, 가리기 규칙은 똑같다.
-
 #### 도구: REA 근거에서 초안 만들기 (`tools/from-rea.mjs`)
 
 ```bash
@@ -122,7 +136,7 @@ node "<이 스킬 폴더>/tools/from-rea.mjs" evidence/03_inspect_page.json evid
   --out report.draft.json --source-out evidence/source.json
 ```
 
-- 넣는 것: REA Evidence JSON 여러 개(종류는 알아서 가린다), 선택으로 공개 HTML 한 장, robots.txt 사본, 캡처 파일.
+- 넣는 것: REA Evidence JSON 여러 개(종류는 알아서 가린다), 선택으로 공개 HTML 한 장, robots.txt 사본, 캡처 파일. 수집기의 정밀 모드가 남긴 `evidence/03_flow.json`(흐름 읽기 기록)과 `evidence/04_code_scan.json`(속 읽기 기록)도 함께 줄 수 있다. 코드에서 본 것(analyze-web-bundle, 04_code_scan.json)은 코드 흔적으로 들어간다.
 - 나오는 것 1: `report.draft.json`. 제목, 가격 문구, 가입과 결제로 가는 누르는 곳, 구역 순서, 스크립트와 저장소 키 이름 같은 기술 흔적이 관찰로 들어가고, 근거 장부가 E1 부터 만들어진다. 고객, 문제, 첫 가치, 매출, 내 버전 명세는 채우지 않는다. 끝에 검사기가 알려 주는 빈칸 목록이 나온다.
 - 나오는 것 2: `source.json`. 원본에서 모은 글, 브랜드 이름과 도메인, 그림과 영상 주소. 7단계의 겹침 검사에만 쓰고 다른 곳에 올리지 않는다. 브랜드 이름은 제목에서 짐작한 것이므로 `--brand` 로 더하거나 파일을 열어 고친다.
 - 가리기: 쿠키, 토큰, 인증 머리말처럼 비밀 값이 실릴 수 있는 키는 통째로 버린다. 이메일, 전화번호, 키 모양 글자는 가린다. 주소는 물음표 뒤를 떼고 적는다.
@@ -146,6 +160,7 @@ node "<이 스킬 폴더>/tools/from-rea.mjs" evidence/03_inspect_page.json evid
 - `observed` 관찰: 근거 화면이나 문서에서 직접 본 것. 근거 1개 이상 필수.
 - `inferred` 추정: 본 것에서 끌어낸 것. 근거 1개 이상 필수, 문장에 추정임이 드러나게 쓴다.
 - `unknown` 모름: 확인할 수 없는 것. 근거 없이 둔다. 지어서 채우지 않는다.
+- `code` 코드 흔적: 내려온 코드 안에서만 본 것. `seen: code` 인 근거가 1개 이상 필수. "지금 그렇다"는 뜻이 아니다. 코드 안에 가격 숫자나 화면 이름이 있어도 화면에서 확인되기 전에는 관찰로 올리지 않는다. 검사기는 코드 근거만 붙은 관찰을 오류로 잡는다. 화면에서 같은 것을 다시 봤다면 화면 근거를 함께 붙여 관찰로 쓴다.
 
 코드나 문서를 읽은 것은 "읽어서 확인"이고 실행해서 본 것이 아니다. 실행해 보지 않았으면 실행 결과처럼 쓰지 않는다.
 
@@ -241,7 +256,7 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
     "terms": { "status": "checked | robots-only | not-found | not-applicable", "note": "", "evidence": [] },
     "one_line": ""
   },
-  "evidence": [ { "id": "E1", "type": "url", "ref": "https://...", "note": "", "seen_at": "YYYY-MM-DD" } ],
+  "evidence": [ { "id": "E1", "type": "url", "ref": "https://...", "note": "", "seen_at": "YYYY-MM-DD", "seen": "page | flow | code" } ],
   "sections": {
     "money":   { "customer": [], "problem": [], "price": [], "revenue": [] },
     "flow":    { "steps": [ { "stage": "arrive | first_value | signup | payment | return | other", "label": "", "text": "", "status": "unknown", "evidence": [] } ] },
@@ -253,7 +268,7 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
 }
 ```
 
-주장 하나의 모양: `{ "text": "...", "status": "observed | inferred | unknown", "evidence": ["E1"] }`
+주장 하나의 모양: `{ "text": "...", "status": "observed | inferred | unknown | code", "evidence": ["E1"] }`
 
 ## 끝내기 전 검수
 
@@ -261,6 +276,8 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
 - [ ] `meta.terms.status` 가 실제로 한 만큼만 적혀 있다 (약관을 읽지 않았으면 `checked` 가 아니다).
 - [ ] 관찰과 추정마다 근거가 있고, 근거를 열면 그 말이 실제로 보인다 (3개 이상 직접 다시 열어 확인).
 - [ ] 수익, 사용자 수 숫자는 공개 주소가 붙은 것만 남았다. 없으면 `revenue` 는 빈 배열.
+- [ ] 코드에서만 본 것은 코드 흔적(`status: code`)으로 남아 있다. 코드에서 찾은 주소를 열거나 불러 본 적이 없다.
+- [ ] `meta.depth` 가 실제로 읽은 깊이와 같고, 건너뛴 단계에는 까닭이 적혀 있다.
 - [ ] 가입, 첫 가치, 결제 단계가 모두 있다 (없음이나 모름도 한 줄로). 유입과 다시 오기도 적었다.
 - [ ] `skeleton` 의 이름이 내 말이고, 원본의 문구, 캡처, 로고가 들어 있지 않다.
 - [ ] (내 버전까지 갔다면) 6번 칸에 대상의 이름, 문구, 화면 이름이 없다. 차별점이 정확히 3개다.

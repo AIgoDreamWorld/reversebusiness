@@ -15,7 +15,7 @@
       no_mine_t: '아직 만들지 않음', no_mine: '내 버전은 아직 없습니다. 리포트 6번 칸의 명세만 에이전트에게 넘겨 새로 만들게 한 뒤, 이렇게 다시 엽니다.', no_mine_cmd: 'rebiz view report.json --mine ./my-version',
       no_skel: '이 리포트에는 구역 뼈대가 없어 다섯 단계로 대신 그렸습니다.',
       attract: '데려오는 층', value: '가치를 주는 층', pay: '돈 받는 층', other: '그 밖', role_return: '다시 오게 하는 층',
-      motto: '모두를 위한 AI 교육', frame_title: '내 버전 미리보기'
+      motto: '모두를 위한 AI 교육', frame_title: '내 버전 미리보기', svc_title: '바깥 서비스', seen_flow: '흐름에서 봄', seen_code: '코드에서만 봄'
     },
     en: {
       stage_title: 'Dissection', stage_sub: 'Sections are drawn as bare wireframes and pulled apart into layers. No screenshots, copy or logos of the original.',
@@ -29,7 +29,7 @@
       no_mine_t: 'Not made yet', no_mine: 'There is no version of my own yet. Hand only the cell 6 spec to your agent, let it build a new page, then open it again like this.', no_mine_cmd: 'rebiz view report.json --mine ./my-version',
       no_skel: 'This report has no section skeleton, so the five steps are drawn instead.',
       attract: 'Attract layer', value: 'Value layer', pay: 'Pay layer', other: 'Other', role_return: 'Return layer',
-      motto: 'AI education for everyone', frame_title: 'My version preview'
+      motto: 'AI education for everyone', frame_title: 'My version preview', svc_title: 'OUTSIDE SERVICES', seen_flow: 'seen in flow', seen_code: 'seen only in code'
     }
   };
   var STAGES = ['arrive', 'first_value', 'signup', 'payment', 'return'];
@@ -116,6 +116,9 @@
       var status = step && /^(observed|inferred|unknown)$/.test(step.status) ? step.status : 'unknown';
       return { key: key, status: status, label: step ? str(step.label) : '', text: step ? str(step.text) : t('missing'), ev: step ? arr(step.evidence).map(str) : [] };
     });
+    // 흐름이나 코드에서 본 바깥 서비스: 결제사는 결제 마디에, 분석 도구는 유입 마디에, 로그인 도구는 가입 마디에 붙인다.
+    var services = arr(((r.sections || {}).flow || {}).services).filter(function (x) { return x && arr(x.names).length; });
+    var attach = { payment: 'payment', analytics: 'arrive', auth: 'signup' };
     var c = { observed: 0, inferred: 0, unknown: 0 };
     nodes.forEach(function (n, i) {
       c[n.status] += 1;
@@ -129,6 +132,12 @@
       card.appendChild(el('span', 'fnode-name', t(n.key)));
       if (n.label && n.label !== t(n.key)) card.appendChild(el('span', 'fnode-label', n.label));
       card.appendChild(el('span', 'fnode-text', n.text));
+      var mine = services.filter(function (x) { return attach[x.kind] === n.key; });
+      if (mine.length) {
+        var sv = el('span', 'fnode-svc');
+        mine.forEach(function (x) { arr(x.names).slice(0, 4).forEach(function (nm) { var chip = el('span', x.seen === 'code' ? 'code' : null, str(nm)); chip.title = t(x.seen === 'code' ? 'seen_code' : 'seen_flow'); sv.appendChild(chip); }); });
+        card.appendChild(sv);
+      }
       if (n.ev.length) {
         var evs = el('span', 'fnode-ev');
         n.ev.slice(0, 4).forEach(function (id) { evs.appendChild(el('span', 'ev', id)); });
@@ -166,6 +175,21 @@
     // 다음 마디가 모름이면 그 앞 선도 점선으로
     var links = box.querySelectorAll('.flink');
     nodes.forEach(function (n, i) { if (i > 0 && n.status === 'unknown' && links[i - 1]) links[i - 1].className = 'flink unknown'; });
+    var old = document.getElementById('flow-services');
+    if (old) old.remove();
+    if (services.length) {
+      var row = el('div', 'flow-services');
+      row.id = 'flow-services';
+      row.appendChild(el('span', 'flow-services-title', t('svc_title')));
+      services.forEach(function (x) {
+        var g = el('span', 'svc ' + (x.seen === 'code' ? 'code' : 'flow'));
+        g.appendChild(el('span', 'svc-kind', str(x.label || x.kind)));
+        arr(x.names).slice(0, 6).forEach(function (nm) { g.appendChild(el('span', 'svc-name', str(nm))); });
+        g.appendChild(el('span', 'svc-seen', t(x.seen === 'code' ? 'seen_code' : 'seen_flow')));
+        row.appendChild(g);
+      });
+      box.parentNode.insertBefore(row, detail);
+    }
     $('flow-sub').textContent = t('flow_sub_a') + t('observed') + ' ' + c.observed + ' · ' + t('inferred') + ' ' + c.inferred + ' · ' + t('unknown') + ' ' + c.unknown + t('flow_sub_b');
   }
 

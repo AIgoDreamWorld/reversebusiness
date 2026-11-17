@@ -9,6 +9,27 @@
     },
     "analyzed_at": "2026-11-17",
     "analyst": "reversebusiness 스킬을 따른 에이전트 (리허설)",
+    "depth": {
+      "mode": "precise",
+      "reached": "code",
+      "steps": [
+        {
+          "key": "surface",
+          "state": "done",
+          "note": "REA inspect-web-page 로 공개 페이지 3개의 글과 구조를 읽음"
+        },
+        {
+          "key": "flow",
+          "state": "skipped",
+          "note": "이 리허설에서는 아무것도 누르지 않았다. 접힌 글과 탭 안쪽은 읽지 못했다"
+        },
+        {
+          "key": "code",
+          "state": "partial",
+          "note": "REA analyze-web-bundle 로 스크립트 10개 가운데 9개를 실행 없이 읽음. 가장 큰 1개는 분석이 끝나지 않았다"
+        }
+      ]
+    },
     "scope": "채널 주인 본인의 공개 판매 페이지를 남의 서비스와 같은 방식으로, 밖에서 보이는 것만 읽은 리허설이다. 본 것: 판매 페이지, 이용약관, 환불 정책, robots.txt (공개 주소 4개, 요청 사이 2초 이상). 보지 않은 것: 로그인, 가입, 결제, 강의실, 소스 저장소. 아무것도 누르거나 제출하지 않았다. 가격과 날짜는 모두 2026-11-17 에 읽은 값이다. 근거 원본(화면 캡처, 받아 둔 HTML, REA 기록)은 공개 저장소에 올리지 않았다.",
     "method": [
       "임시 프로필의 별도 브라우저에 페이지를 띄우고 REA 로 붙어서 읽기 (내 브라우저 프로필과 쿠키는 쓰지 않음)",
@@ -69,7 +90,8 @@
       "type": "doc",
       "ref": "evidence/04_bundle_evidence.json",
       "note": "REA analyze-web-bundle 기록. 스크립트 10개 가운데 9개를 실행 없이 읽음 (partial) (원본은 공개 저장소에 없음)",
-      "seen_at": "2026-11-17"
+      "seen_at": "2026-11-17",
+      "seen": "code"
     },
     {
       "id": "E7",

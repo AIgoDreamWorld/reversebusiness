@@ -12,7 +12,10 @@
       foot_line: '이 리포트는 공개적으로 관찰한 것만 담습니다. 추정은 추정으로, 모르는 것은 모름으로 적습니다. 공부와 기획을 위한 정리이며 법률 자문이 아닙니다.',
       bad_file: '이 파일은 reversebusiness 리포트가 아니에요. schema 가 "rebiz/report@1" 인 report.json 을 넣어 주세요.',
       bad_json: 'JSON 으로 읽을 수 없는 파일이에요.',
-      observed: '관찰', inferred: '추정', unknown: '모름',
+      observed: '관찰', inferred: '추정', unknown: '모름', code: '코드 흔적',
+      code_note: '코드 흔적은 내려온 코드 안에서만 본 것입니다. 지금 그렇다는 뜻이 아닙니다.', code_screens: '코드에서만 이름이 보인 화면 (열어 보지 않음)',
+      depth_title: '읽은 깊이', d_surface: '겉 읽기', d_flow: '흐름 읽기', d_code: '속 읽기', d_surface_s: '화면의 글과 구조', d_flow_s: '펼치기와 요청이 나간 곳', d_code_s: '내려온 코드 안의 이름',
+      ds_done: '읽음', ds_partial: '일부만', ds_skipped: '안 함', ds_blocked: '약관이 막음', ds_failed: '실패', seen_flow: '흐름에서 봄', seen_code: '코드에서 봄',
       tally_title: '이 리포트의 문장', tally_note_a: '따로 정리한 모르는 것 ', tally_note_b: '건', evidence_n: '근거 ',
       m_date: '분석일', m_rel: '관계', m_scope: '범위', m_method: '방법', m_terms: '이용약관', m_by: '분석', m_url: '주소',
       own: '내 것 (소스 읽기 가능)', third: '남의 것 (공개된 것만)',
@@ -35,7 +38,10 @@
       foot_line: 'This report holds only what was publicly observed. Inferences are marked as inferred, unknowns as unknown. It is a study and planning note, not legal advice.',
       bad_file: 'This is not a reversebusiness report. Use a report.json whose schema is "rebiz/report@1".',
       bad_json: 'This file could not be read as JSON.',
-      observed: 'OBSERVED', inferred: 'INFERRED', unknown: 'UNKNOWN',
+      observed: 'OBSERVED', inferred: 'INFERRED', unknown: 'UNKNOWN', code: 'CODE TRACE',
+      code_note: 'A code trace was seen only inside the downloaded code. It does not mean it is true today.', code_screens: 'Screens named only in code (not opened)',
+      depth_title: 'READING DEPTH', d_surface: 'Surface', d_flow: 'Flow', d_code: 'Code', d_surface_s: 'Text and structure on screen', d_flow_s: 'Expanding, and where requests go', d_code_s: 'Names inside the downloaded code',
+      ds_done: 'READ', ds_partial: 'PARTIAL', ds_skipped: 'NOT DONE', ds_blocked: 'BLOCKED BY TERMS', ds_failed: 'FAILED', seen_flow: 'SEEN IN FLOW', seen_code: 'SEEN IN CODE',
       tally_title: 'STATEMENTS IN THIS REPORT', tally_note_a: 'Open questions listed: ', tally_note_b: '', evidence_n: 'Evidence ',
       m_date: 'DATE', m_rel: 'RELATION', m_scope: 'SCOPE', m_method: 'METHOD', m_terms: 'TERMS', m_by: 'ANALYST', m_url: 'URL',
       own: 'Own product (source readable)', third: 'Third party (public material only)',
@@ -76,7 +82,7 @@
 
   // ---------- small pieces ----------
   function statusTag(s) {
-    var ok = s === 'observed' || s === 'inferred' || s === 'unknown';
+    var ok = s === 'observed' || s === 'inferred' || s === 'unknown' || s === 'code';
     return el('span', 'st ' + (ok ? s : 'unknown'), t(ok ? s : 'unknown'));
   }
   function evChips(ids) {
@@ -96,7 +102,7 @@
   }
   function claim(c) {
     var s = c && c.status;
-    var box = el('div', 'claim ' + (s === 'inferred' ? 'inferred' : s === 'observed' ? 'observed' : 'unknown'));
+    var box = el('div', 'claim ' + (s === 'inferred' ? 'inferred' : s === 'observed' ? 'observed' : s === 'code' ? 'code' : 'unknown'));
     var p = el('p', 'claim-text', str(c && c.text));
     var tags = el('span', 'claim-tags');
     tags.appendChild(statusTag(s));
@@ -134,7 +140,7 @@
 
   // ---------- counting ----------
   function countAll(r) {
-    var n = { observed: 0, inferred: 0, unknown: 0 };
+    var n = { observed: 0, inferred: 0, unknown: 0, code: 0 };
     var s = (r && r.sections) || {};
     function add(c) { if (c && n[c.status] !== undefined) n[c.status] += 1; }
     var m = s.money || {};
@@ -158,7 +164,7 @@
   }
 
   function countCell(r, no) {
-    var n = { observed: 0, inferred: 0, unknown: 0 };
+    var n = { observed: 0, inferred: 0, unknown: 0, code: 0 };
     var s = (r && r.sections) || {};
     function add(c) { if (c && n[c.status] !== undefined) n[c.status] += 1; }
     if (no === 1) { var m = s.money || {}; ['customer', 'problem', 'price', 'revenue'].forEach(function (k) { arr(m[k]).forEach(add); }); }
@@ -180,7 +186,7 @@
       var line = el('span', 'idx-counts');
       if (no <= 4) {
         var n = countCell(r, no);
-        ['observed', 'inferred', 'unknown'].forEach(function (k) {
+        ['observed', 'inferred', 'unknown'].concat(n.code ? ['code'] : []).forEach(function (k) {
           var c = el('span', 'idx-c ' + k + (n[k] ? '' : ' zero'));
           c.appendChild(el('i'));
           c.appendChild(document.createTextNode(t(k) + ' ' + n[k]));
@@ -270,6 +276,38 @@
     note.appendChild(document.createTextNode(t('tally_note_b') + '  ·  ' + t('evidence_n')));
     note.appendChild(el('b', null, arr(r.evidence).length));
     box.appendChild(note);
+    if (n.code) {
+      var cn = el('p', 'tally-code');
+      cn.appendChild(el('span', 'st code', t('code') + ' ' + n.code));
+      cn.appendChild(document.createTextNode(' ' + t('code_note')));
+      box.appendChild(cn);
+    }
+    renderDepth(m);
+  }
+
+  // 읽은 깊이: 겉, 흐름, 속 가운데 어디까지 읽었고 왜 멈췄는지.
+  function renderDepth(m) {
+    var box = $('h-depth');
+    box.textContent = '';
+    var d = m.depth && typeof m.depth === 'object' ? m.depth : null;
+    box.hidden = !d;
+    if (!d) return;
+    box.appendChild(el('p', 'depth-title lab', t('depth_title')));
+    var row = el('div', 'depth-row');
+    ['surface', 'flow', 'code'].forEach(function (key, i) {
+      var st = arr(d.steps).filter(function (x) { return x && x.key === key; })[0] || { state: 'skipped', note: '' };
+      var state = /^(done|partial|skipped|blocked|failed)$/.test(st.state) ? st.state : 'skipped';
+      var c = el('div', 'depth-step ' + state);
+      var head = el('p', 'depth-head');
+      head.appendChild(el('span', 'depth-no', '0' + (i + 1)));
+      head.appendChild(el('b', null, t('d_' + key)));
+      head.appendChild(el('span', 'depth-state lab', t('ds_' + state)));
+      c.appendChild(head);
+      c.appendChild(el('p', 'depth-sub', t('d_' + key + '_s')));
+      if (str(st.note)) c.appendChild(el('p', 'depth-note', str(st.note)));
+      row.appendChild(c);
+    });
+    box.appendChild(row);
   }
 
   // ---------- six cells ----------
@@ -304,7 +342,9 @@
 
     // 03 map
     var c3 = cell(3);
+    var codeScreens = arr((s.map || {}).screens).filter(function (sc) { return sc && sc.status === 'code'; });
     arr((s.map || {}).screens).forEach(function (sc) {
+      if (sc && sc.status === 'code') return;
       var d = el('div', 'screen');
       var name = el('p', 'screen-name');
       name.appendChild(el('span', null, str(sc.name)));
@@ -317,6 +357,21 @@
       if (arr(sc.features).length) d.appendChild(list(sc.features, 'features'));
       c3.appendChild(d);
     });
+    if (codeScreens.length) {
+      // 코드에서만 이름이 보인 화면은 점선으로 따로 모은다.
+      var cs = el('div', 'screen screen-code');
+      var head = el('p', 'screen-name');
+      head.appendChild(el('span', null, t('code_screens')));
+      var tg = el('span', 'claim-tags');
+      tg.appendChild(el('span', 'st code', t('code') + ' ' + codeScreens.length));
+      evChips(codeScreens[0].evidence).forEach(function (n) { tg.appendChild(n); });
+      head.appendChild(tg);
+      cs.appendChild(head);
+      var ul = el('ul', 'features code-routes');
+      codeScreens.forEach(function (sc) { var li = el('li', null, str(sc.name)); li.title = str(sc.purpose); ul.appendChild(li); });
+      cs.appendChild(ul);
+      c3.appendChild(cs);
+    }
     grid.appendChild(c3);
 
     // 04 tech
@@ -367,6 +422,7 @@
       row.setAttribute('data-ev', str(e.id).replace(/[^A-Za-z0-9_-]/g, ''));
       row.appendChild(el('span', 'ev-id', str(e.id)));
       row.appendChild(el('span', 'ev-type', str(e.type)));
+      if (e.seen === 'flow' || e.seen === 'code') row.classList.add('seen-' + e.seen);
       var body = el('div');
       var ref = el('p', 'ev-ref');
       if (e.type === 'url' && isHttp(e.ref)) {
@@ -375,7 +431,7 @@
         ref.appendChild(a);
       } else ref.textContent = str(e.ref);
       body.appendChild(ref);
-      var note = [str(e.note), str(e.seen_at)].filter(Boolean).join('  ·  ');
+      var note = [e.seen === 'flow' ? t('seen_flow') : e.seen === 'code' ? t('seen_code') : '', str(e.note), str(e.seen_at)].filter(Boolean).join('  ·  ');
       if (note) body.appendChild(el('p', 'ev-note', note));
       row.appendChild(body);
       lg.appendChild(row);

@@ -7,7 +7,7 @@
 ```bash
 git clone https://github.com/wonseokjung/reversebusiness.git
 cd reversebusiness
-node --test test/
+npm test
 node bin/rebiz.mjs demo
 ```
 
@@ -18,7 +18,8 @@ node bin/rebiz.mjs demo
 - 의존성을 더하지 않습니다.
 - 시험은 임시 HOME 과 `test/fixtures` 의 시험용 사이트만 씁니다. 남의 사이트를 대상으로 한 시험이나 기록을 넣지 않습니다.
 - 남의 페이지의 화면 캡처, 문구 묶음, `source.json` 을 올리지 않습니다. 예시가 필요하면 본인이 운영하는 페이지이거나 지어낸 페이지여야 합니다.
-- 수집기의 한도(최대 5장, 요청 사이 2초, robots.txt 우선, 로그인과 폼 제출 없음)를 느슨하게 하는 변경은 받지 않습니다.
+- 수집기의 한도(최대 5장, 요청 사이 2초, robots.txt 우선, 로그인과 폼 제출 없음, 찾은 주소를 부르지 않음, 약관이 막으면 속 읽기 없음)를 느슨하게 하는 변경은 받지 않습니다.
+- 시험에서 진짜 REA 나 npm 을 부르지 않습니다. REA 자리에는 `test/fixtures/fake-rea.cjs` 를 씁니다.
 - 뷰어는 인터넷 없이 열려야 합니다. 바깥 글꼴, CDN, 추적 코드를 넣지 않습니다.
 - 문서와 화면 문구는 한국어가 먼저이고, 과장과 이모지를 쓰지 않습니다.
 

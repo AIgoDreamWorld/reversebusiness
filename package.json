@@ -1,7 +1,7 @@
 {
   "name": "rebiz",
-  "version": "0.3.1",
-  "description": "reversebusiness: 사업 웹사이트 주소 하나를 넣으면 그 사업을 해부한다. 읽기, 해부(6칸), 내 버전 만들기, 검사. CONNECT AI LAB 오픈소스 1호.",
+  "version": "0.4.0",
+  "description": "reversebusiness: 사업 웹사이트 주소 하나를 넣으면 그 사업을 해부한다. 읽기(겉, 흐름, 속), 해부(6칸), 내 버전 만들기, 검사. CONNECT AI LAB 오픈소스 1호.",
   "private": true,
   "type": "module",
   "bin": {
@@ -21,7 +21,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.test.mjs",
     "demo": "node bin/rebiz.mjs demo",
     "check:example": "node bin/rebiz.mjs check examples/aicitybuilders-vibecoding/report.json",
     "dry-run": "node bin/rebiz.mjs --dry-run"

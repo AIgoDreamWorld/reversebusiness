@@ -3,6 +3,8 @@
 //
 // 사용:
 //   node from-rea.mjs <REA Evidence JSON ...> [옵션]
+//   rebiz <주소> 의 정밀 모드가 남긴 03_flow.json(흐름 읽기 기록)과 04_code_scan.json(속 읽기 기록)도 함께 줄 수 있다.
+//   코드에서만 본 것(analyze-web-bundle, 04_code_scan.json)은 관찰이 아니라 코드 흔적(status: code)으로 들어간다.
 //
 //   --html <파일>        공개 HTML 한 장(선택). 머리말 메타와 JSON-LD 를 읽는다
 //   --robots <파일>      robots.txt 사본(선택). 내용 요약을 meta.terms 에 적는다
@@ -20,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { classifyHosts, looksBehindLogin, SERVICE_KINDS } from './deep.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // 겹침 검사에 넣을 메타는 사람이 읽는 글만. viewport 같은 설정 값은 어느 페이지나 같아서 뺀다.
@@ -54,7 +57,7 @@ const quote = (s) => `"${short(scrub(s))}"`;
 
 // ---------- Evidence 읽기 ----------
 // REA 는 한 건짜리 Evidence({operation, normalized_result})와 묶음({records:[...]}), 요약({summary:{...}})을 낸다.
-function recordsOf(json) {
+export function recordsOf(json) {
   if (!json || typeof json !== 'object') return [];
   if (Array.isArray(json.records)) return json.records;
   if (json.summary && json.summary.operation) return [json.summary];
@@ -63,7 +66,7 @@ function recordsOf(json) {
 }
 
 // 금지 키 아래의 값은 통째로 버린다. Evidence 를 리포트로 옮기기 전에 한 번 거른다.
-function dropSecrets(v, dropped) {
+export function dropSecrets(v, dropped = new Set()) {
   if (Array.isArray(v)) return v.map((x) => dropSecrets(x, dropped));
   if (v && typeof v === 'object') {
     const o = {};
@@ -109,7 +112,7 @@ const SIGNUP = /(회원\s?가입|가입하기|무료\s?가입|sign\s?up|register
 const PAY = /(수강\s?신청|구매|결제|구독|신청하기|주문|buy|checkout|subscribe|purchase|order\s+now|enroll)/i;
 const LOGIN = /(로그인|log\s?in|sign\s?in)/i;
 
-function readInspect(rec) {
+export function readInspect(rec) {
   const n = rec.normalized_result || {};
   const nodes = (n.accessibility && n.accessibility.nodes) || [];
   const { order, textOf, kids } = a11yTree(nodes);
@@ -245,8 +248,13 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
   const inspects = [];
   const bundles = [];
   const others = [];
+  const flowFiles = [];
+  const scanFiles = [];
   for (const f of evidenceFiles) {
     const json = dropSecrets(JSON.parse(fs.readFileSync(f, 'utf8')), dropped);
+    // 정밀 모드가 남긴 우리 기록: 흐름(호스트 이름과 누른 종류), 속(코드에서 찾은 이름)
+    if (json && Array.isArray(json.hosts) && !json.records && !json.operation) { flowFiles.push({ file: path.relative(base, f).split(path.sep).join('/'), j: json }); continue; }
+    if (json && Array.isArray(json.routes) && Array.isArray(json.payments) && !json.records) { scanFiles.push({ file: path.relative(base, f).split(path.sep).join('/'), j: json }); continue; }
     for (const rec of recordsOf(json)) {
       const op = rec.operation || '';
       const rel = path.relative(base, f).split(path.sep).join('/');
@@ -270,7 +278,7 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
 
   // 근거 장부
   const evidence = [];
-  const add = (type, ref, note, at = seen) => { const id = `E${evidence.length + 1}`; evidence.push({ id, type, ref, note, seen_at: at }); return id; };
+  const add = (type, ref, note, at = seen, where = '') => { const id = `E${evidence.length + 1}`; evidence.push({ id, type, ref, note, seen_at: at, ...(where ? { seen: where } : {}) }); return id; };
   const pageEv = new Map();
   for (const { file, page } of inspects) {
     const id = add('url', page.url, `REA inspect-web-page 로 읽은 공개 페이지. 제목 ${quote(page.title)}. 기록 ${file}${page.evidence_id ? ` (${page.evidence_id.slice(0, 14)}…)` : ''}`, page.captured_at || seen);
@@ -280,12 +288,15 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
   const shotEv = []; // { id, url }
   for (const o of others.filter((x) => x.kind === 'shot')) shotEv.push({ id: add('screen', o.file, `REA capture-web-screenshot 기록. 보이는 화면 ${o.viewport.width || '?'}x${o.viewport.height || '?'}. 대상 ${o.url}`, o.at || seen), url: o.url });
   for (const s of shots) shotEv.push({ id: add('screen', path.relative(base, s).split(path.sep).join('/'), '화면 캡처 파일'), url: main.url });
-  const bundleEv = bundles.map(({ file, b }) => add('doc', file, `REA analyze-web-bundle 기록. 스크립트 ${b.scripts}개 가운데 ${b.parsed}개를 실행 없이 읽음 (${b.status || '상태 모름'})`));
+  const bundleEv = bundles.map(({ file, b }) => add('doc', file, `REA analyze-web-bundle 기록. 스크립트 ${b.scripts}개 가운데 ${b.parsed}개를 실행 없이 읽음 (${b.status || '상태 모름'})`, seen, 'code'));
+  const flowEv = flowFiles.map(({ file, j }) => add('doc', file, `흐름 읽기 기록. 펼치기 ${j.clicks || 0}번, 페이지가 요청을 보내려던 호스트 이름 ${j.hosts.length}개 (본문, 쿠키, 토큰은 없음)`, seen, 'flow'));
+  const scanEv = scanFiles.map(({ file, j }) => add('doc', file, `속 읽기 기록. 이미 내려온 스크립트 ${j.files || 0}개에서 이름만 찾음. 찾은 주소는 부르지 않음`, seen, 'code'));
   const htmlEv = html ? add('doc', path.relative(base, htmlFile).split(path.sep).join('/'), `공개 HTML 한 장 사본 (${html.bytes} 바이트). 머리말 메타와 JSON-LD 만 읽음`) : null;
   const robotsEv = robots ? add('doc', path.relative(base, robotsFile).split(path.sep).join('/'), `robots.txt 사본. Allow ${robots.allow.join(' ') || '없음'}, Disallow ${robots.disallow.join(' ') || '없음'}`) : null;
 
   const obs = (text, ...ev) => ({ text, status: 'observed', evidence: ev.filter(Boolean) });
   const unk = (text) => ({ text, status: 'unknown', evidence: [] });
+  const trace = (text, ...ev) => ({ text, status: 'code', evidence: ev.filter(Boolean) });
 
   // 1번 칸
   const price = [];
@@ -344,7 +355,7 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
   const res = Object.entries(main.resources);
   if (res.length) tech.push({ layer: '실린 자원', ...obs(`같은 출처 자원 종류: ${res.map(([k, v]) => `${k} ${v}개`).join(', ')}`, E) });
   for (const [i, { b }] of bundles.entries()) {
-    if (b.routes.length) tech.push({ layer: '경로 후보', ...obs(`스크립트 글자 안에 경로 모양이 보인다: ${b.routes.slice(0, 14).join(', ')}. 열어 보지는 않았다.`, bundleEv[i]) });
+    if (b.routes.length) tech.push({ layer: '경로 후보', ...trace(`스크립트 글자 안에 경로 모양이 보인다: ${b.routes.slice(0, 14).join(', ')}. 열어 보지는 않았다.`, bundleEv[i]) });
     const codes = uniq(b.unknowns.map((u) => (u.match(/\(([a-z_]+)\)/) || [])[1]).filter(Boolean));
     if (b.scripts > b.parsed) tech.push({ layer: '읽지 못한 스크립트', ...unk(`스크립트 ${b.scripts}개 가운데 ${b.scripts - b.parsed}개는 정적 분석이 끝나지 않았다${codes.length ? ` (REA 가 적은 사유: ${codes.join(', ')})` : ''}. 그 안의 경로와 호출은 모른다.`) });
   }
@@ -355,6 +366,25 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
   }
   const ext = main.excluded.filter((e) => e.reason === 'disallowed_origin');
   if (ext.length) tech.push({ layer: '다른 출처', ...unk(`REA 가 기록에서 뺀 다른 출처 항목: ${ext.map((e) => `${e.section} ${e.count}개`).join(', ')}. 어느 서비스의 것인지는 모른다.`) });
+  // 정밀 모드의 기록: 흐름에서 본 바깥 서비스, 코드에서만 본 이름
+  const mainHost = (() => { try { return new URL(main.url).hostname; } catch { return ''; } })();
+  const services = [];
+  flowFiles.forEach(({ j }, i) => {
+    const groups = classifyHosts(j.hosts.map((h) => ({ host: h.host, sent: h.sent })), mainHost);
+    const named = groups.filter((g) => g.kind !== 'other');
+    if (groups.length) tech.push({ layer: '바깥 서비스', ...obs(`페이지가 요청을 보내려던 바깥 호스트 ${groups.reduce((n, g) => n + g.hosts.length, 0)}곳${named.length ? `: ${named.slice(0, 10).map((g) => `${SERVICE_KINDS[g.kind]} ${g.name}`).join(', ')}` : ''}. 호스트 이름만 적었고 주고받은 내용은 보지 않았다.`, flowEv[i]) });
+    for (const k of ['payment', 'analytics', 'video', 'auth', 'data', 'chat']) { const names = groups.filter((g) => g.kind === k).map((g) => g.name); if (names.length) services.push({ kind: k, label: SERVICE_KINDS[k], names, seen: 'flow', evidence: [flowEv[i]] }); }
+  });
+  const shownPaths = new Set(inspects.flatMap(({ page }) => [(() => { try { return new URL(page.url).pathname; } catch { return ''; } })()]));
+  const codeRoutes = uniq([...bundles.flatMap(({ b }) => b.routes), ...scanFiles.flatMap(({ j }) => j.routes)]).filter((r) => r !== '/' && !shownPaths.has(r));
+  const codeEv = scanEv[0] || bundleEv[0] || null;
+  scanFiles.forEach(({ j }, i) => {
+    if ((j.payments || []).length) { tech.push({ layer: '결제 모듈', ...trace(`코드 안에 결제 모듈 이름이 보인다: ${j.payments.map(scrub).join(', ')}. 실제로 그 결제사로 결제되는지는 결제 화면을 열지 않아 모른다.`, scanEv[i]) }); const names = j.payments.map(scrub).filter((n) => !services.some((x) => x.kind === 'payment' && x.names.includes(n))); if (names.length) services.push({ kind: 'payment', label: SERVICE_KINDS.payment, names, seen: 'code', evidence: [scanEv[i]] }); }
+    if ((j.endpoints || []).length) tech.push({ layer: '서버 호출 이름', ...trace(`코드 안에 서버 호출 주소처럼 보이는 이름이 ${j.endpoints.length}개 있다 (예: ${j.endpoints.slice(0, 4).map((x) => short(scrub(x), 28)).join(', ')}). 하나도 불러 보지 않았다.`, scanEv[i]) });
+    if ((j.prices || []).length) price.push(trace(`코드 안에 가격처럼 보이는 숫자나 글자가 있다: ${j.prices.slice(0, 6).map((x) => quote(String(x))).join(', ')}. 화면에서 같은 값을 봤는지 견주어 보고, 못 봤으면 지금 파는 가격이라고 쓰지 않는다.`, scanEv[i]));
+    if ((j.plans || []).length) tech.push({ layer: '요금제 이름', ...trace(`코드 안에 요금제나 상품 이름처럼 보이는 글자가 있다: ${j.plans.slice(0, 6).map((x) => quote(String(x))).join(', ')}. 지금 파는 것인지는 화면에서 확인되지 않았다.`, scanEv[i]) });
+  });
+  if (codeEv) for (const r of codeRoutes.slice(0, 14)) screens.push({ name: short(scrub(r), 48), purpose: looksBehindLogin(r) ? '코드에서만 이름이 보인 화면. 로그인이나 결제 뒤로 보이는 경로다. 열어 보지 않았다.' : '코드에서만 이름이 보인 화면. 화면에서 링크로 이어지는지는 사람이 확인한다. 열어 보지 않았다.', features: [], status: 'code', evidence: [codeEv] });
   tech.push({ layer: '서버', ...unk('서버 쪽 구성과 데이터 저장 방식은 밖에서 보이지 않는다.') });
 
   // 5번 칸
@@ -382,6 +412,14 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
       target: { name: scrub(name) || main.title || main.url, kind: 'web-service', url: main.url, relation },
       analyzed_at: seen,
       analyst: 'from-rea 초안 (사람이나 에이전트가 완성한다)',
+      depth: {
+        mode: 'precise', reached: codeEv ? 'code' : flowFiles.length ? 'flow' : 'surface',
+        steps: [
+          { key: 'surface', state: 'done', note: `REA inspect-web-page 로 공개 페이지 ${inspects.length}개의 글과 구조를 읽음` },
+          { key: 'flow', state: flowFiles.length ? 'done' : 'skipped', note: flowFiles.length ? `흐름 읽기 기록 ${flowFiles.length}개 (펼치기 ${flowFiles.reduce((n, x) => n + (x.j.clicks || 0), 0)}번)` : '흐름 읽기 기록을 받지 않았다. REA 는 페이지를 누르지 않는다' },
+          { key: 'code', state: codeEv ? (bundles.some(({ b }) => b.scripts > b.parsed) ? 'partial' : 'done') : 'skipped', note: codeEv ? `코드에서 화면 경로 이름 ${codeRoutes.length}개${bundles.some(({ b }) => b.scripts > b.parsed) ? '. 일부 스크립트는 분석이 끝나지 않았다' : ''}` : '속 읽기 기록(analyze-web-bundle 근거나 04_code_scan.json)을 받지 않았다' },
+        ],
+      },
       scope: `공개 페이지 ${inspects.length}개를 REA 로 읽었다. 로그인, 결제, 잠긴 화면은 보지 않았다.`,
       method: methods,
       terms: {
@@ -401,7 +439,7 @@ export function buildDraft({ evidenceFiles, htmlFile, robotsFile, shots = [], re
         price,
         revenue: [],
       },
-      flow: { steps },
+      flow: { steps, ...(services.length ? { services } : {}) },
       map: { screens },
       tech: { items: tech },
       unknowns,

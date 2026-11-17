@@ -16,9 +16,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(ROOT, 'bin', 'rebiz.mjs');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-test-'));
 // 가짜 시계로 빨리 돌린다. 브라우저로 그려 읽는 시험은 따로 있으므로 여기서는 꺼 둔다.
-const quick = (extra = {}) => { const c = fakeClock(); return { sleep: c.sleep, now: c.now, clock: c, render: 'off', ...extra }; };
+// REA 도 여기서는 없는 것으로 둔다 (정밀 모드 시험은 따로 있고, 진짜 REA 는 시험에서 부르지 않는다).
+const quick = (extra = {}) => { const c = fakeClock(); return { sleep: c.sleep, now: c.now, clock: c, render: 'off', rea: null, ...extra }; };
 const runCli = (args, home) => new Promise((resolve) => {
-  const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, HOME: home, USERPROFILE: home, NO_COLOR: '1' } });
+  const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, HOME: home, USERPROFILE: home, NO_COLOR: '1', REBIZ_REA: 'none', ...(home.__env || {}) } });
   let stdout = '';
   child.stdout.on('data', (d) => { stdout += d; });
   child.stderr.on('data', (d) => { stdout += d; });

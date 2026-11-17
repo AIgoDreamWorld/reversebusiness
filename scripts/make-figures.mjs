@@ -86,7 +86,7 @@ try {
   const rectOf = (sel) => page.evaluate(`(() => { const n = document.querySelector(${JSON.stringify(sel)}); n.scrollIntoView({ block: 'start' }); const r = n.getBoundingClientRect(); return { x: Math.max(0, r.left + scrollX), y: r.top + scrollY, width: r.width, height: r.height }; })()`);
   await page.viewport({ width: 1632, height: 1000 });
   await page.goto(pathToFileURL(html).href, 1500);
-  await page.evaluate('RebizSections.state().player.seek(12.6)');
+  await page.evaluate('RebizSections.state().player.seek(RebizStage.STILL)');
   await wait(200);
   await page.shot(path.join(DOCS, 'hero.png'), { clip: await rectOf('#stage') });
   await page.shot(path.join(DOCS, 'flow.png'), { clip: await rectOf('#show-flow') });
@@ -100,7 +100,7 @@ try {
     await page.viewport({ width: 960, height: 1400 });
     await page.goto(pathToFileURL(html).href, 1200);
     const clip = await rectOf('#stage');
-    const fps = 8, from = 2.9, to = 24.6;
+    const fps = 8, from = 2.7, to = 26.4;
     let i = 0;
     for (let t = from; t <= to; t += 1 / fps) {
       await page.evaluate(`RebizSections.state().player.seek(${t.toFixed(3)})`);

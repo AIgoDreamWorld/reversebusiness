@@ -6,7 +6,12 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const STATUS = ['observed', 'inferred', 'unknown'];
+// observed 관찰: 화면이나 흐름에서 직접 봄. inferred 추정. unknown 모름. code 코드 흔적: 내려온 코드 안에서만 본 것.
+const STATUS = ['observed', 'inferred', 'unknown', 'code'];
+// 근거를 어디서 봤는지: page 화면에서, flow 흐름(펼치기와 요청)에서, code 코드에서
+const SEEN = ['page', 'flow', 'code'];
+const DEPTHS = ['surface', 'flow', 'code'];
+const STEP_STATES = ['done', 'partial', 'skipped', 'blocked', 'failed'];
 const EV_TYPES = ['url', 'screen', 'doc', 'file', 'run'];
 const STAGES = ['arrive', 'first_value', 'signup', 'payment', 'return', 'other'];
 const ROLES = ['attract', 'value', 'pay', 'return', 'other'];
@@ -24,7 +29,7 @@ export function checkReport(r, { dissectOnly = false } = {}) {
   const warnings = [];
   const err = (where, msg) => errors.push(`${where}: ${msg}`);
   const warn = (where, msg) => warnings.push(`${where}: ${msg}`);
-  const counts = { observed: 0, inferred: 0, unknown: 0 };
+  const counts = { observed: 0, inferred: 0, unknown: 0, code: 0 };
   let myVersion = 'filled';
 
   if (!isObj(r)) return { errors: ['report: JSON 객체가 아니에요'], warnings, counts, myVersion };
@@ -59,6 +64,7 @@ export function checkReport(r, { dissectOnly = false } = {}) {
   // ---- evidence ledger
   const ids = new Set();
   const evType = new Map();
+  const evSeen = new Map();
   if (!Array.isArray(r.evidence)) err('evidence', '배열이어야 해요');
   else {
     r.evidence.forEach((e, i) => {
@@ -66,7 +72,8 @@ export function checkReport(r, { dissectOnly = false } = {}) {
       if (!isObj(e)) return err(w, '객체가 아니에요');
       if (!/^E\d+$/.test(e.id || '')) err(w, 'id 는 E1, E2 같은 모양');
       else if (ids.has(e.id)) err(w, `id ${e.id} 가 겹쳐요`);
-      else { ids.add(e.id); evType.set(e.id, e.type); }
+      else { ids.add(e.id); evType.set(e.id, e.type); evSeen.set(e.id, e.seen || 'page'); }
+      if (e.seen !== undefined && !SEEN.includes(e.seen)) err(w, `seen 은 ${SEEN.join(' | ')} 중 하나`);
       if (!EV_TYPES.includes(e.type)) err(w, `type 은 ${EV_TYPES.join(' | ')} 중 하나`);
       if (!filled(e.ref)) err(w, 'ref 가 비었어요');
       if (e.type === 'url' && filled(e.ref) && !/^https?:\/\//.test(e.ref)) err(w, 'url 근거는 http(s) 주소여야 해요');
@@ -84,6 +91,12 @@ export function checkReport(r, { dissectOnly = false } = {}) {
     }
     if ((status === 'observed' || status === 'inferred') && refs.length === 0)
       err(where, `${status === 'observed' ? '관찰' : '추정'}에는 근거가 1개 이상 필요해요. 없으면 unknown(모름)으로`);
+    const known = refs.filter((id) => ids.has(id));
+    // 코드에서만 본 것은 관찰이 아니다. 화면에서 확인되기 전에는 "지금 그렇다"고 쓸 수 없다.
+    if (status === 'observed' && known.length > 0 && known.every((id) => evSeen.get(id) === 'code'))
+      err(where, '코드에서만 본 것은 관찰(observed)이 아니라 코드 흔적(status: code)으로 적어요. 화면이나 흐름에서 본 근거가 있어야 관찰이에요');
+    if (status === 'code' && !known.some((id) => evSeen.get(id) === 'code'))
+      err(where, '코드 흔적(status: code)에는 코드에서 본 근거(seen: code)가 1개 이상 필요해요');
   };
   const checkClaim = (where, c) => {
     if (!isObj(c)) return err(where, '객체가 아니에요');
@@ -117,7 +130,7 @@ export function checkReport(r, { dissectOnly = false } = {}) {
     (Array.isArray(s.money.revenue) ? s.money.revenue : []).forEach((c, i) => {
       const w = `money.revenue[${i}]`;
       if (!isObj(c)) return;
-      if (c.status !== 'observed') err(w, '수익 숫자는 공개된 근거가 있는 관찰만 적어요. 추정이나 모름이면 지우고 unknowns 에 올리기');
+      if (c.status !== 'observed') err(w, '수익 숫자는 공개된 근거가 있는 관찰만 적어요. 추정, 모름, 코드 흔적이면 지우고 unknowns 에 올리기');
       const pub = (c.evidence || []).some((id) => ['url', 'doc'].includes(evType.get(id)));
       if (c.status === 'observed' && !pub) err(w, '수익 숫자에는 공개 출처(url 또는 doc 근거)가 필요해요');
     });
@@ -137,6 +150,20 @@ export function checkReport(r, { dissectOnly = false } = {}) {
     });
     for (const need of ['signup', 'first_value', 'payment'])
       if (!seen.has(need)) err('flow.steps', `${need} 단계가 없어요. 없거나 모르면 그렇게 한 줄`);
+  }
+
+  // ---- 흐름에서 본 바깥 서비스 (선택)
+  if (isObj(s.flow) && s.flow.services !== undefined) {
+    if (!Array.isArray(s.flow.services)) err('flow.services', '배열이어야 해요');
+    else s.flow.services.forEach((sv, i) => {
+      const w = `flow.services[${i}]`;
+      if (!isObj(sv)) return err(w, '객체가 아니에요');
+      if (!filled(sv.kind)) err(w, 'kind 가 비었어요');
+      if (!Array.isArray(sv.names) || sv.names.length === 0) err(w, 'names 가 비었어요');
+      if (!['flow', 'code'].includes(sv.seen)) err(w, 'seen 은 flow | code 중 하나');
+      checkRefs(w, sv.evidence, null);
+      if (Array.isArray(sv.evidence) && sv.seen === 'flow' && sv.evidence.filter((id) => ids.has(id)).every((id) => evSeen.get(id) === 'code')) err(w, '흐름에서 봤다고 적으려면 흐름에서 본 근거가 있어야 해요');
+    });
   }
 
   // ---- 3 map
@@ -196,6 +223,22 @@ export function checkReport(r, { dissectOnly = false } = {}) {
     if (target && name.toLowerCase().includes(target)) err('my_version.working_name', '대상의 이름을 내 버전 이름에 넣지 않아요');
   }
 
+  // ---- 읽은 깊이 (선택)
+  if (isObj(m) && m.depth !== undefined) {
+    const d = m.depth;
+    if (!isObj(d) || !Array.isArray(d.steps)) err('meta.depth', 'steps 배열이 필요해요');
+    else {
+      d.steps.forEach((st, i) => {
+        if (!isObj(st) || !DEPTHS.includes(st.key)) return err(`meta.depth.steps[${i}]`, `key 는 ${DEPTHS.join(' | ')} 중 하나`);
+        if (!STEP_STATES.includes(st.state)) err(`meta.depth.steps[${i}]`, `state 는 ${STEP_STATES.join(' | ')} 중 하나`);
+        if (st.state !== 'done' && !filled(st.note)) err(`meta.depth.steps[${i}]`, '끝까지 못 읽은 단계에는 까닭(note)을 적어요');
+      });
+      const codeStep = d.steps.find((st) => isObj(st) && st.key === 'code');
+      const usedCode = [...evSeen.values()].includes('code');
+      if (usedCode && (!codeStep || !['done', 'partial'].includes(codeStep.state))) err('meta.depth', '코드에서 본 근거가 있는데 속 읽기 단계가 done 이나 partial 이 아니에요');
+    }
+  }
+
   // ---- skeleton (선택): 해부 장면에 쓰는 뼈대
   if (r.skeleton !== undefined) {
     const sk = r.skeleton;
@@ -239,7 +282,7 @@ function main() {
     process.exit(2);
   }
   const { errors, warnings, counts, myVersion } = checkReport(r, { dissectOnly });
-  console.log(`관찰 ${counts.observed} · 추정 ${counts.inferred} · 모름 ${counts.unknown}`);
+  console.log(`관찰 ${counts.observed} · 추정 ${counts.inferred} · 모름 ${counts.unknown}${counts.code ? ` · 코드 흔적 ${counts.code}` : ''}`);
   if (dissectOnly) console.log(`내 버전 칸  ${myVersion === 'empty' ? '아직 안 씀 (해부만 검사)' : '쓰여 있어서 함께 검사'}`);
   for (const w of warnings) console.log(`경고  ${w}`);
   for (const e of errors) console.log(`오류  ${e}`);
