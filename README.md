@@ -1,0 +1,248 @@
+<p align="center">
+  <b>CONNECT AI LAB · 모두를 위한 AI 교육</b><br>
+  <a href="https://www.youtube.com/@CONNECT-AI-LAB">유튜브 CONNECT AI LAB</a> · <a href="https://www.aicitybuilders.com">강의 aicitybuilders.com</a>
+</p>
+
+# reversebusiness
+
+![해부 장면: 페이지의 구역이 뼈대로 나타나 층으로 벌어지고, 돈이 흐르는 길과 내 버전이 이어진다](docs/hero.gif)
+
+**사업 웹사이트 주소 하나를 넣으면 그 사업을 해부합니다.** 누가 왜 돈을 내는지, 어디서 들어와 어디서 결제하는지, 페이지가 어떤 층으로 짜여 있는지를 확인된 만큼만 적고, 구조만 배워 내 버전을 새로 만듭니다. 원본을 그대로 복제하지 않습니다.
+
+```bash
+npx github:wonseokjung/reversebusiness
+```
+
+CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상.
+
+[English below](#reversebusiness-english)
+
+## 30초 따라 하기
+
+1. 터미널에 위의 한 줄을 넣습니다. 이 컴퓨터의 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 바뀔 것을 보여 주고, 스킬을 설치합니다.
+2. 끝나자마자 브라우저에 해부 화면이 열리고 예시 해부가 재생됩니다.
+3. 에이전트를 새로 시작하고 이렇게 말합니다.
+
+   ```
+   reversebusiness 로 <궁금한 사업의 주소> 를 해부해 줘
+   ```
+
+에이전트 없이 바로 보고 싶으면 주소를 붙입니다. 공개 페이지를 가볍게 읽어 그 주소의 해부 화면을 엽니다.
+
+```bash
+npx github:wonseokjung/reversebusiness https://example.com
+```
+
+에이전트가 대신 실행할 때처럼 물어볼 사람이 없는 터미널에서는 `--yes` 를 붙여야 설치합니다. 붙이지 않으면 바뀔 것만 보여 주고 예시 화면을 엽니다.
+
+| 옵션 | 하는 일 |
+|---|---|
+| `--yes` | 묻지 않고 설치 |
+| `--dry-run` | 무엇이 바뀌는지만 보여 주기 |
+| `--remove` | 이 도구가 설치한 스킬만 지우기 |
+| `--no-open` | 브라우저를 열지 않고 화면 주소만 출력 |
+| `--agent claude,codex` | 에이전트를 직접 고르기 (`claude`, `codex`, `cursor`, `gemini`, `antigravity`, `agents`) |
+
+## 네 단계
+
+| 단계 | 하는 일 | 나오는 것 |
+|---|---|---|
+| 1. 읽기 | robots.txt 와 약관을 먼저 확인하고 공개 페이지에서 근거를 모은다 | 근거 장부, 초안 |
+| 2. 해부 | 정해진 6칸을 채운다. 문장마다 관찰, 추정, 모름 가운데 하나가 붙는다 | `report.json`, 해부 화면 |
+| 3. 내 버전 만들기 | 6번 칸의 명세만 보고 새로 만든다. 문구, 이름, 색, 그림은 전부 새로 | 내 버전 폴더 |
+| 4. 검사 | 원본과 겹치는 문장, 이름, 그림 주소가 없는지 본다 | 통과 또는 겹친 곳 목록 |
+
+6칸: 누가 왜 돈을 내는가 / 핵심 사용자 흐름 / 화면과 기능 지도 / 기술 구성 / 근거와 모르는 것 / 내 버전 명세.
+
+## 해부 화면에서 보이는 것
+
+한 파일짜리 HTML 이고 인터넷 없이 열립니다. 원본의 화면 캡처, 문구, 로고는 쓰지 않고 뼈대만 그립니다.
+
+**해부 장면.** 페이지의 구역이 선으로 된 블록으로 나타나 층층이 벌어지고, 구역마다 역할이 붙습니다: 데려오는 층, 가치를 주는 층, 돈 받는 층, 다시 오게 하는 층.
+
+![해부 장면](docs/hero.png)
+
+**돈이 흐르는 구조도.** 유입, 첫 가치, 가입, 결제, 다시 오기. 마디마다 관찰, 추정, 모름과 근거 번호가 붙고, 모르는 구간은 점선으로 끊깁니다.
+
+![돈이 흐르는 구조도](docs/flow.png)
+
+**원본 뼈대에서 내 버전으로.** 슬라이더를 밀면 뼈대가 내 버전 페이지로 바뀝니다.
+
+![원본 뼈대와 내 버전](docs/compare.png)
+
+**영상으로 저장.** 해부 과정을 9:16 (1080x1920) 약 28초 영상으로 브라우저에서 바로 저장합니다. 소리는 없습니다. 영상 저장이 안 되는 브라우저에서는 안내만 나옵니다.
+
+움직임 줄이기 설정을 따르고, 폰 너비에서도 볼 수 있습니다. 화면의 글자는 한국어와 영어를 바꿀 수 있습니다.
+
+## 주소를 바로 읽을 때 지키는 것
+
+`rebiz <주소>` 는 에이전트 없이 도는 가벼운 수집기입니다.
+
+- robots.txt 를 가장 먼저 받습니다. 막혀 있으면 받지 않고 멈춥니다.
+- 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장.
+- 요청 사이 2초 이상. robots.txt 의 Crawl-delay 가 더 길면 그 값을 따르고, 60초보다 길면 멈춥니다.
+- GET 만 합니다. 로그인, 가입, 결제, 폼 제출을 하지 않고, 그리로 가는 링크는 열지 않습니다.
+- 쿠키와 토큰을 저장하지도 보내지도 않습니다. 스크립트를 실행하지 않습니다.
+- 누가 읽는지 숨기지 않습니다. User-Agent 에 이름과 이 저장소 주소가 들어갑니다.
+- 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춥니다. 남은 링크도 받지 않습니다.
+- 채울 수 있는 것만 관찰로 적고, 나머지는 모름으로 둡니다. 고객, 문제, 내 버전 같은 해석은 하지 않습니다.
+
+스크립트로 그리는 페이지는 받은 HTML 에 글이 거의 없어 모름이 많이 남습니다. 그때는 에이전트와 함께 채웁니다.
+
+## 지켜야 할 선
+
+배워도 되는 것은 기능, 흐름, 사업 구조입니다. 가져오면 안 되는 것은 코드, 문구, 이미지, 브랜드입니다. 스킬 본문 맨 위에 아래 여덟 가지가 적혀 있고, 에이전트는 어기는 요청을 거절합니다.
+
+1. 로그인, 결제, 접근 제한을 넘지 않는다. 가짜 계정도 만들지 않는다.
+2. 비공개 데이터를 모으지 않는다.
+3. 대량으로 긁지 않는다. 사람이 읽는 속도로, 정해진 한도 안에서만.
+4. 이용약관과 robots.txt 를 먼저 확인하고 리포트에 적는다.
+5. 코드, 문구, 이미지, 아이콘, 로고를 복제하지 않는다.
+6. 내 버전을 "○○ 클론"이라고 부르지 않는다. 대상의 이름을 내 이름에 넣지 않는다.
+7. 추정은 추정이라고 표시한다. 모르는 것은 모름으로 둔다.
+8. 매출, 사용자 수 같은 숫자는 공개된 근거가 있을 때만 적는다. 없으면 비운다.
+
+검사기 두 개가 이 가운데 기계로 볼 수 있는 것을 잡습니다. 리포트 검사는 근거 없는 관찰, 출처 없는 수익 숫자, 빠진 단계, 대상 이름이 들어간 내 버전 이름을 잡고, 겹침 검사는 다섯 낱말 이상 연달아 같은 문장, 원본 이름과 도메인, 원본 그림 주소를 잡습니다. 색, 글꼴, 배치의 닮음은 사람이 두 화면을 나란히 놓고 봅니다.
+
+이 도구의 결과는 공부와 기획을 위한 정리이며 법률 자문이 아닙니다.
+
+## 대표 예시
+
+CONNECT AI LAB 이 운영하는 aicitybuilders.com 의 공개 판매 페이지 한 장을, 남의 서비스와 같은 방식으로 밖에서 보이는 것만 읽었습니다. 문장 33개 가운데 관찰 20, 추정 6, 모름 7. 수익 숫자 칸은 비어 있습니다. 가격과 날짜는 2026-11-17 에 읽은 값입니다.
+
+![구조 비교](examples/aicitybuilders-vibecoding/structure-compare.png)
+
+왼쪽은 원본의 뼈대, 오른쪽은 구조만 배워 새로 만든 가상의 예시 페이지입니다. 파일과 설명은 [examples/aicitybuilders-vibecoding](examples/aicitybuilders-vibecoding) 에 있습니다.
+
+## 설치되는 곳
+
+하는 일은 폴더 복사 하나입니다. 에이전트의 설정 파일은 건드리지 않습니다. 같은 이름의 다른 폴더가 있으면 건너뛰고, 지울 때는 설치 때 남긴 표식 파일이 있는 폴더만 지웁니다.
+
+| 에이전트 | 스킬이 놓이는 곳 |
+|---|---|
+| Claude Code | `~/.claude/skills/reversebusiness` |
+| Codex, Cursor, Gemini CLI | `~/.agents/skills/reversebusiness` (세 에이전트가 함께 읽는 공용 폴더에 한 벌) |
+| Antigravity | `~/.gemini/config/skills/reversebusiness` |
+| 직접 지정 | `--dir <스킬 폴더>`, 또는 `--project` (지금 폴더의 `.claude/skills`) |
+
+## 명령 모음
+
+```bash
+rebiz                                   # 설치 + 예시 해부 화면
+rebiz <주소>                            # 그 주소를 바로 해부 (--out <폴더>, --pages 1~5)
+rebiz demo                              # 예시 해부 화면만
+rebiz view report.json --mine ./my-version   # 리포트를 해부 화면으로 (내 버전 미리보기 포함)
+rebiz check report.json                 # 리포트 검사
+rebiz clone-check ./my-version --source source.json   # 내 버전이 원본과 겹치는지
+rebiz draft <REA 근거 JSON ...>         # REA 로 모은 근거에서 초안 만들기
+rebiz --remove                          # 지우기
+```
+
+`rebiz` 자리에 `npx github:wonseokjung/reversebusiness` 를 쓰면 설치 없이 같은 명령이 됩니다. `source.json` 과 `requests.json` 에는 원본의 글과 요청 기록이 들어 있으므로 공개 장소에 올리지 않습니다.
+
+## REA 위에서 쓰는 별개의 도구
+
+더 깊게 읽을 때는 [REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) 가 모은 근거를 입력으로 쓸 수 있습니다. reversebusiness 는 REA 를 포크하지 않았고, REA 의 코드와 문구가 들어 있지 않으며, REA 를 설치하거나 설정을 바꾸지 않습니다. REA 프로젝트가 만들거나 보증한 배포물이 아닙니다.
+
+- REA 는 앱, 웹 페이지, 네트워크 캡처를 분석 엔진에 연결하는 도구입니다. reversebusiness 는 그 위에서 공개 자료로 사업을 읽는 절차, 6칸 리포트, 해부 화면, 검사기를 더합니다.
+- REA 가 없어도 가벼운 수집기로 같은 절차를 시작할 수 있습니다.
+- REA 가 필요하면 위의 저장소에서 직접 받고, REA 의 책임 있는 사용 안내도 함께 따릅니다.
+
+## 개발과 시험
+
+```bash
+node --test test/            # 설치기, 수집기, 검사기 시험 (임시 HOME, 내 컴퓨터의 시험용 사이트)
+node bin/rebiz.mjs --dry-run
+```
+
+시험한 환경은 macOS, Node 20, Chrome 입니다. Windows 와 Linux 에서는 아직 시험하지 못했습니다. 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 에이전트가 읽는 안내는 [AGENTS.md](AGENTS.md), 문제 신고는 [SECURITY.md](SECURITY.md) 에 있습니다.
+
+## 라이선스
+
+MIT License. Copyright (c) 2026 CONNECT AI LAB. [LICENSE](LICENSE)
+
+---
+
+# reversebusiness (English)
+
+**Put in one business website URL and it dissects that business.** It records who pays and why, where people arrive and where they pay, and how the page is layered, only as far as it was confirmed. Then you build your own version from the structure alone. It does not copy the original.
+
+```bash
+npx github:wonseokjung/reversebusiness
+```
+
+Open source no. 1 from CONNECT AI LAB. Zero dependencies, Node 18 or later. The skill text and terminal output are in Korean; the dissection view has a Korean and English label switch.
+
+## Thirty seconds
+
+1. Run the line above. It finds the agents on this machine (Claude Code, Codex, Gemini CLI, Cursor, Antigravity), shows what will change, and installs the skill.
+2. Your browser opens the dissection view and plays an example.
+3. Restart your agent and say: `Use reversebusiness to dissect <URL>`.
+
+Without an agent, add a URL and the public pages are read lightly:
+
+```bash
+npx github:wonseokjung/reversebusiness https://example.com
+```
+
+In a terminal with nobody to ask (for example when an agent runs the command), it installs only with `--yes`. Other options: `--dry-run`, `--remove`, `--no-open`, `--agent claude,codex,cursor,gemini,antigravity,agents`.
+
+## Four steps
+
+| Step | What happens | Output |
+|---|---|---|
+| 1. Read | Check robots.txt and the terms first, then collect evidence from public pages | evidence ledger, draft |
+| 2. Dissect | Fill six fixed cells. Every statement is tagged observed, inferred or unknown | `report.json`, dissection view |
+| 3. Build my version | Build from the cell 6 spec only. Copy, names, colors and images are all new | your version |
+| 4. Check | Look for shared sentences, names and asset URLs | pass, or a list of overlaps |
+
+## What the view shows
+
+A single HTML file that works offline. It never uses screenshots, copy or logos of the original, only wireframes.
+
+- **Dissection scene**: page sections appear as wire blocks and pull apart into layers labeled attract, value, pay and return.
+- **Money flow**: arrive, first value, sign-up, payment, return. Each step carries its status and evidence numbers. Unknown links are dashed.
+- **Skeleton to my version**: a slider turns the wireframe into your own page.
+- **Save as video**: the dissection as a 9:16 (1080x1920) video of about 28 seconds, saved in the browser. No sound. Browsers that cannot record show a notice instead.
+
+It respects the reduced motion setting and works at phone width.
+
+## What the light collector keeps to
+
+robots.txt first, and it stops if the URL is disallowed. One page plus pricing, terms and refund links, five pages at most. Two seconds or more between requests, or the site's Crawl-delay when it is longer (it stops if that is over 60 seconds). GET only: no login, sign-up, payment or form submission, and links that lead there are not opened. No cookies or tokens are stored or sent, and no scripts are run. The User-Agent names the tool and this repository. It stops at 401, 403, 429 and human-check pages. Only what it can see is written as observed; everything else stays unknown.
+
+## Lines we do not cross
+
+Functions, flows and business structure may be studied. Code, copy, images and brand may not be taken.
+
+1. No bypassing logins, payments or access limits. No fake accounts.
+2. No collecting non-public data.
+3. No bulk crawling. Human reading speed, within fixed limits.
+4. Check the terms of service and robots.txt first, and record the result.
+5. No copying code, copy, images, icons or logos.
+6. Never call your version an "X clone", and never put the target's name in yours.
+7. Mark inferences as inferred. Leave unknowns as unknown.
+8. Revenue and user numbers only with a public source. Otherwise leave them empty.
+
+The output is a study and planning note, not legal advice.
+
+## Example
+
+One public sales page of aicitybuilders.com, run by CONNECT AI LAB, read from the outside exactly as a third-party service would be. Of 33 statements, 20 are observed, 6 inferred and 7 unknown. The revenue cell is empty. Prices and dates are values read on 2026-11-17. See [examples/aicitybuilders-vibecoding](examples/aicitybuilders-vibecoding).
+
+## Where the skill goes
+
+Setup only copies a folder and never edits an agent configuration file: `~/.claude/skills/reversebusiness` for Claude Code, `~/.agents/skills/reversebusiness` shared by Codex, Cursor and Gemini CLI, and `~/.gemini/config/skills/reversebusiness` for Antigravity. `--remove` deletes only folders that carry the marker file written at install time.
+
+## A separate tool that works on top of REA
+
+For deeper reading, evidence collected by [REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) can be used as input. reversebusiness is not a fork of REA, contains no REA code or text, and never installs or reconfigures REA. It is not made or endorsed by the REA project. Without REA, the light collector starts the same procedure. Get REA itself from the repository linked above and follow its responsible use notice.
+
+## License
+
+MIT License. Copyright (c) 2026 CONNECT AI LAB. See [LICENSE](LICENSE).
+
+<p align="center">
+  <b>CONNECT AI LAB · 모두를 위한 AI 교육</b><br>
+  <a href="https://www.youtube.com/@CONNECT-AI-LAB">YouTube CONNECT AI LAB</a> · <a href="https://www.aicitybuilders.com">aicitybuilders.com</a>
+</p>
