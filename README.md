@@ -13,7 +13,7 @@
 npx github:wonseokjung/reversebusiness
 ```
 
-**한 줄이면 reversebusiness 스킬이 바로 깔립니다.** 외부 도구를 따로 내려받거나 추가 패키지를 설치하지 않고 자체 수집기로 동작합니다. (이미 이 컴퓨터에 별도 도구 `rea` 가 깔려 있으면 정밀 모드에서 함께 쓸 뿐, 자동으로 내려받지 않습니다.)
+**한 줄이면 `reversebusiness` 스킬이 바로 설치됩니다.** 별도 패키지나 외부 도구를 자동으로 내려받지 않고 자체 수집기로 단독 동작합니다. (이미 컴퓨터에 로컬 `rea` 실행 파일이 설치되어 있으면 정밀 모드에서 함께 활용할 뿐입니다.)
 
 CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows · Linux 지원).
 
@@ -21,7 +21,7 @@ CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows 
 
 ## 30초 따라 하기
 
-1. 터미널에 위의 한 줄을 넣습니다. 이 컴퓨터의 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 바뀔 것을 보여 주고, 한 번 확인받은 뒤 reversebusiness 스킬을 설치합니다. 다른 외부 도구나 패키지는 내려받지 않습니다.
+1. 터미널에 위 명령 한 줄을 실행합니다. 컴퓨터에 설치된 AI 코딩 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 변경될 위치를 먼저 보여 준 뒤, 확인을 거쳐 `reversebusiness` 스킬을 설치합니다. 다른 외부 패키지나 도구는 내려받지 않습니다.
 2. 끝나자마자 브라우저에 해부 화면이 열리고 예시 해부가 재생됩니다.
 3. 에이전트를 새로 시작하고 이렇게 말합니다.
 
@@ -29,7 +29,7 @@ CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows 
    reversebusiness 로 <궁금한 사업의 주소> 를 해부해 줘
    ```
 
-에이전트 없이 바로 보고 싶으면 주소를 붙입니다. 공개 페이지를 읽어 그 주소의 해부 화면을 엽니다. (이 컴퓨터에 `rea` 가 이미 있으면 정밀 모드로 읽고, 없으면 자체 브라우저/HTML 수집기로 읽습니다.)
+에이전트 없이 바로 확인하려면 주소를 함께 넘깁니다. 공개 페이지를 읽어 해부 화면을 바로 열어 줍니다. (컴퓨터에 로컬 `rea` 가 이미 있으면 정밀 모드로, 없으면 자체 브라우저/HTML 수집기로 읽습니다.)
 
 ```bash
 npx github:wonseokjung/reversebusiness https://example.com
@@ -45,7 +45,7 @@ npx github:wonseokjung/reversebusiness https://example.com
 | `--no-open` | 브라우저를 열지 않고 화면 주소만 출력 |
 | `--agent claude,codex` | 에이전트를 직접 고르기 (`claude`, `codex`, `cursor`, `gemini`, `antigravity`, `agents`) |
 
-외부 도구를 자동으로 설치하지 않으므로 `--remove` 역시 reversebusiness 가 설치한 스킬 폴더만 깨끗하게 지웁니다.
+외부 도구를 건드리거나 자동으로 설치하지 않으므로 `--remove` 역시 `reversebusiness` 가 설치한 스킬 폴더만 깨끗하게 지웁니다.
 
 ## 세 깊이로 읽기: 겉, 흐름, 속
 
@@ -60,7 +60,7 @@ npx github:wonseokjung/reversebusiness https://example.com
 - 속 읽기는 **약관이 서비스 코드 분석을 금지하면 하지 않고**, 리포트에 그 사실을 적습니다. 약관을 읽지 못했을 때도 하지 않습니다. 내 사이트면 `--own` 을 붙이면 합니다.
 - 코드에서만 본 것은 관찰이 아니라 **코드 흔적**으로 따로 적습니다. 코드 안에 가격 숫자가 있어도 화면에서 확인되기 전에는 "지금 파는 가격"이라고 쓰지 않고, 검사기가 그렇게 쓴 리포트를 오류로 잡습니다.
 - 어느 단계가 실패하거나 시간 한도를 넘으면 건너뛰고, 화면 맨 위의 "읽은 깊이"에 어디까지 읽었고 왜 멈췄는지 남깁니다.
-- REA 가 없거나 `--light` 를 붙이면 겉 읽기만 합니다 (가벼운 모드).
+- 로컬 `rea` 가 없거나 `--light` 옵션을 붙이면 겉 읽기만 수행합니다(가벼운 모드).
 
 ## 네 단계
 
@@ -132,7 +132,7 @@ rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz vi
 - 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춥니다. 남은 링크도 받지 않습니다.
 - 채울 수 있는 것만 관찰로 적고, 나머지는 모름으로 둡니다. 고객, 문제, 내 버전 같은 해석은 하지 않습니다.
 
-정밀 모드에서 REA 는 이 임시 브라우저에 내 컴퓨터 안(127.0.0.1)의 주소로만 붙어서 읽습니다. 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝과 화면 맨 위에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나옵니다. 그때는 REA 나 에이전트와 함께 채웁니다. 내 사이트를 읽을 때는 `--own` 을 붙입니다.
+정밀 모드에서 로컬 REA 가 있다면 이 임시 브라우저에 내 컴퓨터 안(`127.0.0.1`)의 주소로만 붙어서 읽습니다. 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝과 화면 맨 위에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나옵니다. 그때는 에이전트(또는 로컬 REA)와 함께 빈칸을 채웁니다. 내 사이트를 읽을 때는 `--own` 을 붙입니다.
 
 ## 지켜야 할 선
 
@@ -165,7 +165,7 @@ CONNECT AI LAB 이 운영하는 aicitybuilders.com 의 공개 판매 페이지 �
 
 | 에이전트 | 스킬이 놓이는 곳 | 비고 |
 |---|---|---|
-| Claude Code | `~/.claude/skills/reversebusiness` | 전용 스킬 폴더 (`%USERPROFILE%\.claude\skills\reversebusiness` on Windows) |
+| Claude Code | `~/.claude/skills/reversebusiness` | 전용 스킬 폴더 (Windows: `%USERPROFILE%\.claude\skills\reversebusiness`) |
 | Codex | `~/.agents/skills/reversebusiness` | 공용 스킬 폴더 |
 | Antigravity | `~/.gemini/config/skills/reversebusiness` | 전용 스킬 폴더 (도구 실행 권한 허용 시 자동 수집/검사 동작) |
 | Cursor | `~/.agents/skills/reversebusiness` | Codex 와 공용 폴더 |

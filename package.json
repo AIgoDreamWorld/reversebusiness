@@ -21,7 +21,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node scripts/test.mjs",
     "demo": "node bin/rebiz.mjs demo",
     "check:example": "node bin/rebiz.mjs check examples/aicitybuilders-vibecoding/report.json",
     "dry-run": "node bin/rebiz.mjs --dry-run"

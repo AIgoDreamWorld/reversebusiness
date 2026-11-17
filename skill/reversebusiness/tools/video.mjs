@@ -98,11 +98,12 @@ export async function recordVideo(reportPath, { out = '', mine = '', lang = '', 
       args: ['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--host-resolver-rules=MAP * ~NOTFOUND'],
     });
     const { cdp } = B;
+    const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what} 시간 초과`)), ms))]);
     const stat = { blocked: 0, errors: [], download: null, done: false };
-    await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dl, eventsEnabled: true });
-    const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
-    const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-    const S = (method, params) => cdp.send(method, params, sessionId);
+    await withTimeout(cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dl, eventsEnabled: true }), L.loadMs, '브라우저 초기화');
+    const { targetId } = await withTimeout(cdp.send('Target.createTarget', { url: 'about:blank' }), L.loadMs, '새 탭 열기');
+    const { sessionId } = await withTimeout(cdp.send('Target.attachToTarget', { targetId, flatten: true }), L.loadMs, '탭 연결');
+    const S = (method, params) => withTimeout(cdp.send(method, params, sessionId), L.loadMs, method);
     let loaded = false;
     cdp.on((m) => {
       const p = m.params || {};

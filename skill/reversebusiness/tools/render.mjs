@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 export const RENDER_LIMITS = { startMs: 12000, navMs: 15000, settleMs: 5000, idleMs: 700, growMs: 2500, maxRequests: 300, maxHeight: 12000, width: 1440, height: 900, flowClicks: 8, clickSettleMs: 1500, scriptBytes: 8_000_000 };
 
@@ -113,6 +113,7 @@ function cdpPipe(child) {
       });
     },
     on(fn) { handlers.add(fn); return () => handlers.delete(fn); },
+    close: fail,
   };
 }
 
@@ -154,12 +155,19 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
     '--headless=new', '--remote-debugging-pipe', ...(debugPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []), `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--disable-background-networking', '--disable-component-update',
     '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
+    ...(process.platform === 'win32' ? ['--disable-gpu'] : []),
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
+  ], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: true });
   let exited = false;
   child.on('exit', () => { exited = true; });
   child.on('error', () => { exited = true; });
-  const onExit = () => { try { child.kill('SIGKILL'); } catch { /* 이미 끝남 */ } };
+  const killTree = () => {
+    if (process.platform === 'win32' && child.pid) {
+      try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { /* 이미 끝남 */ }
+    }
+    try { child.kill('SIGKILL'); } catch { /* 이미 끝남 */ }
+  };
+  const onExit = () => killTree();
   process.on('exit', onExit);
   const cdp = cdpPipe(child);
 
@@ -168,8 +176,10 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
     if (!exited) {
       try { await withTimeout(cdp.send('Browser.close'), 2000, '끄기'); } catch { /* 아래에서 끈다 */ }
       for (let i = 0; i < 20 && !exited; i += 1) await sleep(100);
-      if (!exited) { try { child.kill('SIGKILL'); } catch { /* 이미 끝남 */ } for (let i = 0; i < 20 && !exited; i += 1) await sleep(100); }
+      if (!exited) { killTree(); for (let i = 0; i < 20 && !exited; i += 1) await sleep(100); }
     }
+    cdp.close();
+    try { child.stdio[3]?.destroy(); child.stdio[4]?.destroy(); } catch { /* 이미 닫힘 */ }
     try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 }); } catch { /* 임시 폴더는 운영체제가 지운다 */ }
     return { exited, profileRemoved: !fs.existsSync(profile) };
   }
