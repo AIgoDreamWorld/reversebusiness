@@ -13,15 +13,15 @@
 npx github:wonseokjung/reversebusiness
 ```
 
-**한 줄이면 `reversebusiness` 스킬이 바로 설치됩니다.** 별도 패키지나 외부 도구를 자동으로 내려받지 않고 자체 수집기로 단독 동작합니다. (이미 컴퓨터에 로컬 `rea` 실행 파일이 설치되어 있으면 정밀 모드에서 함께 활용할 뿐입니다.)
+**한 줄이면 `reversebusiness` 스킬이 설치되고, 확인을 받은 뒤 REA 도 함께 설치됩니다.** REA 는 페이지를 깊게 읽는 눈이고(원본 [morluto/rea](https://github.com/morluto/rea), 별개의 도구, MIT), reversebusiness 는 그 눈으로 본 것을 사업으로 정리합니다. REA 설치를 거절하면 자체 수집기로 가벼운 모드(겉 읽기)로 동작합니다.
 
-CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows · Linux 지원).
+CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows · Linux 지원). REA 까지 쓰려면 Node 22.19 이상, 24.11 이상, 26 이상.
 
 [English below](#reversebusiness-english)
 
 ## 30초 따라 하기
 
-1. 터미널에 위 명령 한 줄을 실행합니다. 컴퓨터에 설치된 AI 코딩 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 변경될 위치를 먼저 보여 준 뒤, 확인을 거쳐 `reversebusiness` 스킬을 설치합니다. 다른 외부 패키지나 도구는 내려받지 않습니다.
+1. 터미널에 위 명령 한 줄을 실행합니다. 컴퓨터에 설치된 AI 코딩 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 변경될 위치를 먼저 보여 준 뒤, 확인을 거쳐 `reversebusiness` 스킬을 설치합니다. REA 가 없으면 무엇을 할지(공식 npm 패키지 `rea-agents`, 실행할 명령 `npx -y rea-agents@latest setup --client …`, 바뀔 에이전트 설정과 스킬 폴더)를 먼저 보여 주고, 따로 한 번 더 확인받은 뒤에만 내려받아 설치합니다. 확인 전에는 아무것도 내려받지 않습니다.
 2. 끝나자마자 브라우저에 해부 화면이 열리고 예시 해부가 재생됩니다.
 3. 에이전트를 새로 시작하고 이렇게 말합니다.
 
@@ -29,7 +29,7 @@ CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows 
    reversebusiness 로 <궁금한 사업의 주소> 를 해부해 줘
    ```
 
-주소 하나만 바로 넘겨 해부할 수도 있습니다. 공개 페이지를 읽어 해부 화면을 바로 열어 줍니다. (컴퓨터에 로컬 `rea` 가 이미 있으면 정밀 모드로, 없으면 자체 브라우저/HTML 수집기로 읽습니다.)
+주소 하나만 바로 넘겨 해부할 수도 있습니다. 공개 페이지를 읽어 해부 화면을 바로 열어 줍니다. (REA 가 있으면 정밀 모드로 읽습니다. 없으면 설치 전에 바뀔 것을 보여 주고 확인을 받습니다. 거절하거나 설치가 실패하면 자체 브라우저/HTML 수집기로 가벼운 모드로 끝까지 읽고, 왜 가벼운 모드인지와 정밀 모드로 가는 방법을 한 줄로 알려 줍니다.)
 
 ```bash
 npx github:wonseokjung/reversebusiness https://example.com
@@ -37,17 +37,18 @@ npx github:wonseokjung/reversebusiness https://example.com
 
 컴퓨터에 `claude` 나 `codex` CLI 가 있으면 수집 직후 **"해부·내 버전 명세까지 한 번에 채울까요? [Y/n]"** 하고 묻고, 한 번에 1~6번 칸 + `my-version` 출발점 + 완성된 `report.html` 까지 이어서 엽니다. (확인 없이 맡기려면 `--agent claude --yes`, 초안만 빠르게 보려면 `--no-fill` 을 붙입니다. 바이브코딩 툴 채팅창에 맡길 때는 에이전트가 초안 수집 뒤 나머지 칸과 `my-version` 까지 자동으로 끝냅니다.)
 
-에이전트가 대신 실행할 때처럼 물어볼 사람이 없는 터미널에서는 `--yes` 를 붙여야 설치합니다. 붙이지 않으면 바뀔 것만 보여 주고 예시 화면을 엽니다.
+에이전트가 대신 실행할 때처럼 물어볼 사람이 없는 터미널에서는 `--yes` 를 붙여야 설치합니다(REA 도 같습니다). 붙이지 않으면 바뀔 것만 보여 주고 예시 화면을 엽니다.
 
 | 옵션 | 하는 일 |
 |---|---|
-| `--yes` | 묻지 않고 설치 |
-| `--dry-run` | 무엇이 바뀌는지만 보여 주기 |
-| `--remove` | 이 도구가 설치한 스킬만 지우기 |
+| `--yes` | 묻지 않고 설치 (REA 가 없으면 REA 도) |
+| `--dry-run` | 무엇이 바뀌는지만 보여 주기 (아무것도 내려받거나 바꾸지 않음) |
+| `--no-rea` | REA 설치 제안을 건너뛰기 (REA 가 없으면 가벼운 모드로 동작) |
+| `--remove` | 이 도구가 설치한 스킬만 지우기 (REA 는 지우지 않음) |
 | `--no-open` | 브라우저를 열지 않고 화면 주소만 출력 |
 | `--agent claude,codex` | 에이전트를 직접 고르기 (`claude`, `codex`, `cursor`, `gemini`, `antigravity`, `agents`) |
 
-외부 도구를 건드리거나 자동으로 설치하지 않으므로 `--remove` 역시 `reversebusiness` 가 설치한 스킬 폴더만 깨끗하게 지웁니다.
+Node 가 REA 가 받는 판보다 낮으면 REA 는 건너뛰고 까닭과 방법을 알려 줍니다. 우리 스킬은 그대로 설치되고 가벼운 모드로 동작합니다. REA 가 이미 있으면 다시 설치하지 않습니다. `--remove` 는 reversebusiness 만 지우고 REA 는 지우지 않습니다(REA 까지 지우려면 `npx -y rea-agents@latest uninstall`).
 
 ## 세 깊이로 읽기: 겉, 흐름, 속
 
@@ -62,7 +63,7 @@ npx github:wonseokjung/reversebusiness https://example.com
 - 속 읽기는 **약관이 서비스 코드 분석을 금지하면 하지 않고**, 리포트에 그 사실을 적습니다. 약관을 읽지 못했을 때도 하지 않습니다. 내 사이트면 `--own` 을 붙이면 합니다.
 - 코드에서만 본 것은 관찰이 아니라 **코드 흔적**으로 따로 적습니다. 코드 안에 가격 숫자가 있어도 화면에서 확인되기 전에는 "지금 파는 가격"이라고 쓰지 않고, 검사기가 그렇게 쓴 리포트를 오류로 잡습니다.
 - 어느 단계가 실패하거나 시간 한도를 넘으면 건너뛰고, 화면 맨 위의 "읽은 깊이"에 어디까지 읽었고 왜 멈췄는지 남깁니다.
-- 로컬 `rea` 가 없거나 `--light` 옵션을 붙이면 겉 읽기만 수행합니다(가벼운 모드).
+- REA 가 없거나(설치를 거절한 경우 포함) `--light` 옵션을 붙이면 겉 읽기만 수행합니다(가벼운 모드).
 
 ## 네 단계
 
@@ -134,7 +135,7 @@ rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz vi
 - 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춥니다. 남은 링크도 받지 않습니다.
 - 채울 수 있는 것만 관찰로 적고, 나머지는 모름으로 둡니다. 고객, 문제, 내 버전 같은 해석은 하지 않습니다.
 
-정밀 모드에서 로컬 REA 가 있다면 이 임시 브라우저에 내 컴퓨터 안(`127.0.0.1`)의 주소로만 붙어서 읽습니다. 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝과 화면 맨 위에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나옵니다. 그때는 에이전트(또는 로컬 REA)와 함께 빈칸을 채웁니다. 내 사이트를 읽을 때는 `--own` 을 붙입니다.
+정밀 모드에서는 REA 가 이 임시 브라우저에 내 컴퓨터 안(`127.0.0.1`)의 주소로만 붙어서 읽습니다. 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝과 화면 맨 위에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나옵니다. 그때는 에이전트(또는 REA)와 함께 빈칸을 채웁니다. 내 사이트를 읽을 때는 `--own` 을 붙입니다.
 
 ## 지켜야 할 선
 
@@ -188,24 +189,26 @@ rebiz fill report.json                  # 모름 칸 채우기: 붙여 넣을 �
 rebiz build report.json                 # 새 사이트의 출발점 만들기 (--out <폴더>, --topic "내 사업 주제", --force)
 rebiz apply report.json --to ./내-프로젝트   # 내 첫 화면과 견준 빈칸 목록 (--page <파일>, --url http://localhost:3000, --agent claude|codex)
 rebiz video report.json                 # 해부 영상(9:16)을 파일로 (--out <파일>, --mine <내 버전 폴더>)
-rebiz --remove                          # 이 도구가 설치한 스킬만 지우기
+rebiz --remove                          # 이 도구가 설치한 스킬만 지우기 (REA 는 지우지 않음)
 ```
 
 `fill`, `build`, `apply`, `video` 는 리포트 파일을 주지 않으면 지금 폴더의 `report.json` 을 씁니다.
 
 `rebiz` 자리에 `npx github:wonseokjung/reversebusiness` 를 쓰면 설치 없이 같은 명령이 됩니다. 에이전트가 채운 리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 `check` 를 다시 돌립니다. `source.json`, `requests.json`, `evidence/` 폴더에는 원본의 글과 요청 기록이 들어 있으므로 공개 장소에 올리지 않습니다.
 
-## 독립 동작과 선택 연동
+## REA 위에서 쓰는 별개의 도구
 
-reversebusiness 는 어떤 외부 도구에도 의존하지 않고 단독으로 동작합니다.
+[REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) 는 원본이고 별개의 도구입니다. reversebusiness 는 REA 를 포크하지 않았고, REA 의 코드와 문구를 담고 있지 않습니다. REA 프로젝트가 만들거나 보증한 배포물이 아닙니다.
 
-- 자체 HTML/헤드리스 브라우저 수집기만으로 1차 수집, 6칸 초안 생성, 리포트 검사, 해부 화면, 내 버전 생성, 9:16 영상 저장까지 끝까지 실행됩니다.
-- 만약 이 컴퓨터에 별개 오픈소스인 [REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) 의 `rea` 실행 파일이 **이미 설치되어 있다면** 정밀 모드(겉 · 흐름 · 속 읽기)에 활용할 뿐, 설치하거나 내려받지 않습니다. reversebusiness 는 REA 를 포크하지 않았고 REA 의 코드와 문구를 담고 있지 않습니다.
+- REA 는 앱, 웹 페이지, 네트워크 캡처를 분석 엔진에 연결하는 도구입니다. reversebusiness 는 REA 를 눈으로 써서 공개 자료로 사업을 읽는 절차, 6칸 리포트, 해부 화면, 검사기를 더합니다.
+- 함께 설치할 때는 확인을 받은 뒤에만 REA 의 공식 npm 패키지 이름 `rea-agents` 로 부릅니다 (`npx -y rea-agents@latest setup --client …`). 이름이 비슷한 다른 패키지나 다른 주소에서 받지 않습니다. 확인한 뒤에는 REA 가 스스로 낸 설치 계획을 먼저 보여 주고 설치합니다. 에이전트 설정에 REA 연결을 더하는 것은 REA 의 setup 이고, 바꾸기 전에 REA 가 백업을 남깁니다.
+- 거절하거나, Node 가 낮거나, 설치가 실패해도 해부는 막히지 않습니다. 자체 HTML/헤드리스 브라우저 수집기로 1차 수집, 6칸 초안, 검사, 해부 화면, 내 버전, 9:16 영상까지 가벼운 모드로 끝까지 실행됩니다.
+- REA 를 쓸 때는 REA 의 책임 있는 사용 안내도 함께 따릅니다. REA 까지 지우려면 `npx -y rea-agents@latest uninstall`.
 
 ## 개발과 시험
 
 ```bash
-npm test                     # 설치기, 수집기, 검사기, 해부 다음 명령 시험 (임시 HOME, 임시 git 저장소, 내 컴퓨터의 시험용 사이트, 에이전트/외부 도구는 대역)
+npm test                     # 설치기, REA 설치 확인, 수집기, 검사기, 정밀 모드, 해부 다음 명령 시험 (임시 HOME, 임시 git 저장소, 내 컴퓨터의 시험용 사이트, REA 와 에이전트는 대역)
 node bin/rebiz.mjs --dry-run
 ```
 
@@ -225,17 +228,17 @@ MIT License. Copyright (c) 2026 CONNECT AI LAB. [LICENSE](LICENSE)
 npx github:wonseokjung/reversebusiness
 ```
 
-**One line installs the reversebusiness skill cleanly.** It runs standalone with its own collector and never downloads external packages. (If a local `rea` binary is already installed on your machine, precise mode uses it automatically.)
+**One line installs the reversebusiness skill, and REA too after you confirm.** REA is the eye that reads a page in depth (the original, a separate tool: [morluto/rea](https://github.com/morluto/rea), MIT); reversebusiness turns what it sees into a business reading. Decline REA and it runs in light mode (surface only) with its own collector.
 
-Open source no. 1 from CONNECT AI LAB. Zero dependencies, Node 18 or later (macOS · Windows · Linux). The skill text and terminal output are in Korean; the dissection view has a Korean and English label switch.
+Open source no. 1 from CONNECT AI LAB. Zero dependencies, Node 18 or later (macOS · Windows · Linux; REA itself needs Node 22.19+, 24.11+ or 26+). The skill text and terminal output are in Korean; the dissection view has a Korean and English label switch.
 
 ## Thirty seconds
 
-1. Run the line above. It finds the agents on this machine (Claude Code, Codex, Gemini CLI, Cursor, Antigravity), shows what will change, and after one confirmation installs the skill. Nothing else is downloaded.
+1. Run the line above. It finds the agents on this machine (Claude Code, Codex, Gemini CLI, Cursor, Antigravity), shows what will change, and after one confirmation installs the skill. If REA is missing it shows what it would do (the official npm package `rea-agents`, the command `npx -y rea-agents@latest setup --client …`, the agent configs and skill folders it changes) and asks a second time; nothing is downloaded before you say yes. `--no-rea` skips the offer.
 2. Your browser opens the dissection view and plays an example.
 3. Restart your agent and say: `Use reversebusiness to dissect <URL>`.
 
-Without an agent, add a URL. When REA is present the precise mode turns on by itself:
+Without an agent, add a URL. When REA is present the precise mode turns on by itself; when it is missing the same consent step comes first, and if you decline or the install fails the light mode still finishes the job and tells you why in one line:
 
 ```bash
 npx github:wonseokjung/reversebusiness https://example.com
@@ -243,7 +246,7 @@ npx github:wonseokjung/reversebusiness https://example.com
 
 컴퓨터에 `claude` 나 `codex` CLI 가 있으면 수집 직후 **"해부·내 버전 명세까지 한 번에 채울까요? [Y/n]"** 하고 묻고, 한 번에 1~6번 칸 + `my-version` 출발점 + 완성된 `report.html` 까지 이어서 엽니다. (확인 없이 맡기려면 `--agent claude --yes`, 초안만 빠르게 보려면 `--no-fill` 을 붙입니다. 바이브코딩 툴 채팅창에 맡길 때는 에이전트가 초안 수집 뒤 나머지 칸과 `my-version` 까지 자동으로 끝냅니다.)
 
-In a terminal with nobody to ask (for example when an agent runs the command), it installs only with `--yes`. Other options: `--dry-run`, `--remove`, `--no-open`, `--agent claude,codex,cursor,gemini,antigravity,agents`.
+In a terminal with nobody to ask (for example when an agent runs the command), it installs only with `--yes` (REA included); otherwise it only shows what would change. Other options: `--dry-run` (changes and downloads nothing), `--no-rea`, `--remove` (removes reversebusiness only, never REA), `--no-open`, `--agent claude,codex,cursor,gemini,antigravity,agents`.
 
 ## Four steps
 
@@ -320,9 +323,9 @@ One public sales page of aicitybuilders.com, run by CONNECT AI LAB, read from th
 
 Setup only copies a folder and never edits an agent configuration file: `~/.claude/skills/reversebusiness` for Claude Code, `~/.agents/skills/reversebusiness` shared by Codex, Cursor and Gemini CLI, and `~/.gemini/config/skills/reversebusiness` for Antigravity (using `%USERPROFILE%` on Windows). `--remove` deletes only folders that carry the marker file written at install time. Cross-platform tests run on Ubuntu, macOS and Windows via `.github/workflows/test.yml`.
 
-## Standalone design and optional local REA
+## A separate tool that works on top of REA
 
-reversebusiness works completely standalone without downloading or installing external packages. [REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) is a separate tool: reversebusiness is not a fork of REA and contains no REA code or text. If an already-installed local `rea` binary is detected on your machine, precise mode can use it automatically; otherwise it runs cleanly with its built-in collector and headless browser support.
+[REA: Reverse Engineer Anything](https://github.com/morluto/rea) (MIT License, Copyright (c) 2026 morluto) is the original and a separate tool. reversebusiness is not a fork of REA and contains no REA code or text. It is not made or endorsed by the REA project. It installs REA only after you confirm, and only ever calls REA's npm package by its name `rea-agents` (`npx -y rea-agents@latest setup --client …`), never a similarly named package or another address. After you confirm it first shows the plan REA itself reports, then applies it; the changes to agent configuration are made by REA's own setup, which keeps backups. If you decline, your Node is too old, or the install fails, the light mode runs the whole procedure anyway. Follow REA's responsible use notice when you use it. `--remove` removes reversebusiness only; to remove REA as well run `npx -y rea-agents@latest uninstall`.
 
 ## License
 

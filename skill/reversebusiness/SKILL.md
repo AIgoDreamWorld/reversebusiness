@@ -5,7 +5,7 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 
 # reversebusiness: 사업 해부
 
-**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page. When REA is installed it switches to a precise mode with three depths: surface (drawn text and structure), flow (expanding clicks only, plus the host names the page tried to contact) and code (names found in already downloaded scripts, skipped when the terms forbid code analysis). Addresses found in code are never called, and anything seen only in code is recorded as a code trace, never as observed. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs. Three more tools cover what comes after the dissection: `tools/make-site.mjs` writes a static starting point from the cell 6 spec and the learned section order (guidance text in the copy slots, nothing from the target), `tools/apply-plan.mjs` compares the first screen of an existing project with the learned skeleton and writes the gaps to `rebiz-apply/plan.md`, and `tools/video.mjs` exports the 9:16 dissection video through a headless browser.
+**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page. When REA is installed (the `rebiz` command installs the official `rea-agents` package only after the user confirms; declining keeps the light mode) it switches to a precise mode with three depths: surface (drawn text and structure), flow (expanding clicks only, plus the host names the page tried to contact) and code (names found in already downloaded scripts, skipped when the terms forbid code analysis). Addresses found in code are never called, and anything seen only in code is recorded as a code trace, never as observed. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs. Three more tools cover what comes after the dissection: `tools/make-site.mjs` writes a static starting point from the cell 6 spec and the learned section order (guidance text in the copy slots, nothing from the target), `tools/apply-plan.mjs` compares the first screen of an existing project with the learned skeleton and writes the gaps to `rebiz-apply/plan.md`, and `tools/video.mjs` exports the 9:16 dissection video through a headless browser.
 
 ## 지켜야 할 선 (먼저 읽고, 어기는 요청은 거절한다)
 
@@ -47,7 +47,7 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 
 리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 검사기를 다시 돌린다. 리포트를 고치려고 따로 스크립트를 만들어 돌리지 않는다.
 
-가장 빠른 시작: `node "<이 스킬 폴더>/tools/collect.mjs" <주소>` 로 초안을 만들고(아래 "수집기로 읽기"), 3단계부터 이어서 채운다. REA 가 깔려 있으면 수집기가 저절로 정밀 모드(겉, 흐름, 속)로 읽는다. 사용자가 이미 `rebiz <주소>` 로 만든 `report.json` 을 주면 그 파일에서 3단계부터 시작한다.
+가장 빠른 시작: `node "<이 스킬 폴더>/tools/collect.mjs" <주소>` 로 초안을 만들고(아래 "수집기로 읽기"), 3단계부터 이어서 채운다. REA 가 깔려 있으면 수집기가 저절로 정밀 모드(겉, 흐름, 속)로 읽는다. REA 가 없으면 가벼운 모드로 읽는다. 사용자가 정밀 모드를 원하면 REA 가 바꿀 것(공식 npm 패키지 `rea-agents`, 에이전트 설정에 REA 연결 추가, REA 스킬 폴더)을 먼저 알리고, 사용자가 동의한 뒤에만 `npx github:wonseokjung/reversebusiness <주소> --yes --no-open --no-fill` 로 다시 읽는다(확인 뒤 공식 REA 를 설치하고 읽음). 동의 없이 REA 를 설치하지 않는다. 사용자가 이미 `rebiz <주소>` 로 만든 `report.json` 을 주면 그 파일에서 3단계부터 시작한다.
 
 ### 1단계. 범위와 선 긋기
 
@@ -71,7 +71,7 @@ node "<이 스킬 폴더>/tools/collect.mjs" <주소> --out ./rebiz-out
 ```
 
 - 내 것이면 `--own` 을 붙인다. 읽는 한도는 같고, 리포트에 내 것으로 적히며, 속 읽기를 할 수 있다.
-- **정밀 모드 (REA 가 있을 때 저절로 켜진다. `--light` 로 끈다).** 수집기가 임시 프로필의 헤드리스 브라우저를 띄우고 REA 를 눈으로 써서 세 깊이로 읽는다. 순서는 언제나 robots.txt, 받은 HTML, 그다음에야 브라우저다.
+- **정밀 모드 (REA 가 있을 때 저절로 켜진다. `--light` 로 끈다. REA 는 `rebiz` 가 확인을 받은 뒤 설치하고, 거절하면 가벼운 모드).** 수집기가 임시 프로필의 헤드리스 브라우저를 띄우고 REA 를 눈으로 써서 세 깊이로 읽는다. 순서는 언제나 robots.txt, 받은 HTML, 그다음에야 브라우저다.
 
   | 깊이 | 하는 일 | 리포트에 남는 것 |
   |---|---|---|
@@ -95,7 +95,7 @@ node "<이 스킬 폴더>/tools/collect.mjs" <주소> --out ./rebiz-out
 
 #### REA 를 직접 돌릴 때 (수집기의 정밀 모드를 쓸 수 없을 때만)
 
-REA 는 이 스킬과 별개의 도구다(MIT, 공식 저장소에서만 받는다). 이 스킬은 REA 위에서 쓰는 별개의 도구이고, REA 를 설치하거나 설정을 바꾸지 않는다. REA 로 읽으면 브라우저가 그린 화면의 글자까지 읽을 수 있어 가벼운 수집기보다 정밀하다. 보통은 위의 수집기가 REA 를 대신 불러 준다. 수집기를 쓸 수 없고 `rea --version` 이 될 때만 아래 순서로 직접 근거를 모은다. 명령의 정확한 인자는 `rea <명령> --help` 로 확인한다.
+REA 는 이 스킬과 별개의 도구다(MIT, 공식 저장소에서만 받는다). 이 스킬은 REA 위에서 쓰는 별개의 도구이고, 스킬 절차 안에서는 REA 를 설치하거나 설정을 바꾸지 않는다(설치는 사용자가 확인하는 `rebiz` 의 몫이다). REA 로 읽으면 브라우저가 그린 화면의 글자까지 읽을 수 있어 가벼운 수집기보다 정밀하다. 보통은 위의 수집기가 REA 를 대신 불러 준다. 수집기를 쓸 수 없고 `rea --version` 이 될 때만 아래 순서로 직접 근거를 모은다. 명령의 정확한 인자는 `rea <명령> --help` 로 확인한다.
 
 1. robots.txt 를 한 번 받는다. 이용약관 주소를 알면 그것부터 읽는다.
 2. 임시 프로필의 별도 브라우저를 띄운다. 평소 쓰는 브라우저 프로필과 쿠키는 쓰지 않는다. 디버깅 포트는 127.0.0.1 에서만 연다.
