@@ -308,7 +308,12 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
         await sleep(50);
       }
       if (!(port > 0) || !wsPath) throw new Error(`브라우저 디버깅 포트를 찾지 못했어요 (code=${exitCode}): ${errLog.trim()}`);
-      cdp = await connectCdpWs(port, wsPath, L.startMs);
+      let lastErr = null;
+      while (Date.now() < deadline && !exited) {
+        try { cdp = await connectCdpWs(port, wsPath, Math.max(1000, deadline - Date.now())); break; }
+        catch (e) { lastErr = e; await sleep(80); }
+      }
+      if (!cdp) throw lastErr || new Error('브라우저 WebSocket 연결 실패');
     }
   } catch (e) { await close(); throw e; }
 
@@ -344,7 +349,7 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const S = (method, params) => cdp.send(method, params, sessionId);
     const inflight = new Set();
-    let loaded = false, lastActivity = Date.now(), mainFrame = '', first = true, locked = false;
+    let loaded = false, mainSeen = !/^https?:/i.test(url), pausing = 0, lastActivity = Date.now(), mainFrame = '', first = true, locked = false;
     const off = cdp.on((m) => {
       if (m.sessionId !== sessionId) return;
       const p = m.params || {};
@@ -353,48 +358,52 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
         if (Object.keys(p.headers || {}).some((k) => /^set-cookie$/i.test(k))) { stats.cookiesDropped += 1; S('Network.clearBrowserCookies').catch(() => {}); }
       } else if (m.method === 'Fetch.requestPaused') {
         lastActivity = Date.now();
+        pausing += 1;
         (async () => {
-          const req = p.request || {};
-          const isMain = p.resourceType === 'Document' && p.frameId === mainFrame;
-          let verdict, host = '';
-          try { host = new URL(req.url).hostname; } catch { /* 주소가 아님 */ }
-          if (!/^https?:/i.test(req.url)) verdict = { ok: true };
-          else if (stats.allowed >= L.maxRequests) verdict = { ok: false, why: '요청 한도' };
-          else if (isMain && locked) verdict = { ok: false, why: '펼친 뒤 다른 페이지로 넘어가기' };
-          else if (req.method !== 'GET') verdict = { ok: false, why: 'GET 이 아닌 요청' };
-          else if (p.resourceType === 'Document' && !isMain) verdict = { ok: false, why: '끼워 넣은 다른 페이지' };
-          else if (['Ping', 'CSPViolationReport', 'Media', 'EventSource', 'WebSocket'].includes(p.resourceType)) verdict = { ok: false, why: p.resourceType === 'Media' ? '영상 파일' : '알림 신호' };
-          else {
-            try { verdict = await allow(req.url, { isMain, first: isMain && first, type: p.resourceType }); } catch { verdict = { ok: false, why: '확인 실패' }; }
-          }
-          if (isMain) first = false;
-          if (host) {
-            const h = hosts.get(host) || { count: 0, types: new Set(), sent: 0 };
-            h.count += 1; h.types.add(p.resourceType); if (verdict.ok) h.sent += 1;
-            hosts.set(host, h);
-          }
           try {
-            if (verdict.ok) {
-              stats.allowed += 1;
-              if (p.networkId) inflight.add(p.networkId);
-              if (keepScripts && p.resourceType === 'Script' && p.networkId && verdict.sameSite) scripts.set(p.networkId, req.url);
-              // 받은 쿠키를 돌려보내지 않도록, 요청을 내보내기 직전에 쿠키를 비운다.
-              try { await S('Network.clearBrowserCookies'); } catch { /* 그대로 보낸다 */ }
-              await S('Fetch.continueRequest', { requestId: p.requestId });
-            } else {
-              note(verdict.why || '막음');
-              if (isMain && !locked) stats.mainBlocked = verdict.why || '막음';
-              await S('Fetch.failRequest', { requestId: p.requestId, errorReason: 'BlockedByClient' });
+            const req = p.request || {};
+            const isMain = p.resourceType === 'Document' && p.frameId === mainFrame;
+            if (isMain && /^https?:/i.test(req.url)) mainSeen = true;
+            let verdict, host = '';
+            try { host = new URL(req.url).hostname; } catch { /* 주소가 아님 */ }
+            if (!/^https?:/i.test(req.url)) verdict = { ok: true };
+            else if (stats.allowed >= L.maxRequests) verdict = { ok: false, why: '요청 한도' };
+            else if (isMain && locked) verdict = { ok: false, why: '펼친 뒤 다른 페이지로 넘어가기' };
+            else if (req.method !== 'GET') verdict = { ok: false, why: 'GET 이 아닌 요청' };
+            else if (p.resourceType === 'Document' && !isMain) verdict = { ok: false, why: '끼워 넣은 다른 페이지' };
+            else if (['Ping', 'CSPViolationReport', 'Media', 'EventSource', 'WebSocket'].includes(p.resourceType)) verdict = { ok: false, why: p.resourceType === 'Media' ? '영상 파일' : '알림 신호' };
+            else {
+              try { verdict = await allow(req.url, { isMain, first: isMain && first, type: p.resourceType }); } catch { verdict = { ok: false, why: '확인 실패' }; }
             }
-          } catch { /* 탭이 이미 닫힘 */ }
+            if (isMain) first = false;
+            if (host) {
+              const h = hosts.get(host) || { count: 0, types: new Set(), sent: 0 };
+              h.count += 1; h.types.add(p.resourceType); if (verdict.ok) h.sent += 1;
+              hosts.set(host, h);
+            }
+            try {
+              if (verdict.ok) {
+                stats.allowed += 1;
+                if (p.networkId) inflight.add(p.networkId);
+                if (keepScripts && p.resourceType === 'Script' && p.networkId && verdict.sameSite) scripts.set(p.networkId, req.url);
+                // 받은 쿠키를 돌려보내지 않도록, 요청을 내보내기 직전에 쿠키를 비운다.
+                try { await S('Network.clearBrowserCookies'); } catch { /* 그대로 보낸다 */ }
+                await S('Fetch.continueRequest', { requestId: p.requestId });
+              } else {
+                note(verdict.why || '막음');
+                if (isMain && !locked) stats.mainBlocked = verdict.why || '막음';
+                await S('Fetch.failRequest', { requestId: p.requestId, errorReason: 'BlockedByClient' });
+              }
+            } catch { /* 탭이 이미 닫힘 */ }
+          } finally { pausing -= 1; lastActivity = Date.now(); }
         })();
       } else if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') { inflight.delete(p.requestId); lastActivity = Date.now(); } else if (m.method === 'Network.responseReceived') {
-        if (p.type === 'Document' && p.frameId === mainFrame && p.response && !locked) stats.status = p.response.status;
-      } else if (m.method === 'Page.loadEventFired') { loaded = true; lastActivity = Date.now(); } else if (m.method === 'Page.javascriptDialogOpening') { S('Page.handleJavaScriptDialog', { accept: false }).catch(() => {}); }
+        if (p.type === 'Document' && p.frameId === mainFrame && p.response && !locked) { mainSeen = true; stats.status = p.response.status; }
+      } else if (m.method === 'Page.loadEventFired') { if (mainSeen) { loaded = true; lastActivity = Date.now(); } } else if (m.method === 'Page.javascriptDialogOpening') { S('Page.handleJavaScriptDialog', { accept: false }).catch(() => {}); }
     });
     const idle = async (maxMs) => {
       const until = Date.now() + maxMs;
-      while (Date.now() < until) { if (inflight.size === 0 && Date.now() - lastActivity >= L.idleMs) return true; await sleep(100); }
+      while (Date.now() < until) { if (pausing === 0 && inflight.size === 0 && Date.now() - lastActivity >= L.idleMs) return true; await sleep(100); }
       return false;
     };
     const evaluate = async (expression, ms = 8000) => {
@@ -418,6 +427,8 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       mainFrame = (await S('Page.getFrameTree')).frameTree.frame.id;
       try { await S('Emulation.setDocumentCookieDisabled', { disabled: true }); } catch { /* 옛 브라우저 */ }
       await S('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
+      loaded = false;
+      lastActivity = Date.now();
       S('Page.navigate', { url }).catch(() => {});
       while (!loaded && Date.now() - started < L.navMs && !stats.mainBlocked) await sleep(100);
       timedOut = !loaded && !stats.mainBlocked;
