@@ -179,17 +179,17 @@ test('도움말, 판 번호, 모르는 인자', () => {
   assert.equal(bad.status, 2);
   assert.match(bad.out, /모르는 인자: --nope/);
   assert.ok(!/\x1b\[/.test(run(dir, '--help').out), '사람이 보는 터미널이 아니면 색을 쓰지 않는다');
-  // 다음 판에 들어올 명령의 자리: 이름을 잡아 두고, 지금은 안내만 한다
-  for (const [cmd, hint] of [['build', /6번 칸 명세만 보고 내 버전을 새로 만들어 줘/], ['apply', /새 브랜치에서 하고, 바뀔 것을 먼저 보여 줘/], ['video', /영상으로 저장 \(9:16\)/]]) {
+  // 0.5.0 에 들어온 명령: 리포트 없이 부르면 쓰는 법을 알려 준다 (예정 안내가 아니다)
+  for (const [cmd, usage] of [['build', /사용: rebiz build <report\.json> \[--out <폴더>\] \[--topic "내 사업 주제"\]/], ['apply', /사용: rebiz apply <report\.json> --to <내 프로젝트 폴더>/], ['video', /사용: rebiz video <report\.json> \[--out <파일>\] \[--mine <내 버전 폴더>\]/], ['fill', /사용: rebiz fill <report\.json>/]]) {
     const r = run(dir, cmd);
     assert.equal(r.status, 2, r.out);
-    assert.match(r.out, /다음 판\(0\.5\.0\)에 들어옵니다/);
-    assert.match(r.out, hint);
+    assert.match(r.out, usage);
+    assert.doesNotMatch(r.out, /다음 판/);
   }
   const h = run(dir, '--help').out;
-  assert.match(h, /만들기와 적용 {2}\(다음 판 0\.5\.0 에 들어옵니다\)\n\s+rebiz build \[--topic "내 사업 주제"\]/);
-  assert.match(h, /rebiz apply <내 프로젝트 폴더>/);
-  assert.match(h, /rebiz video\s+해부 영상 뽑기 {2}\(0\.5\.0 예정\)/);
+  assert.match(h, /만들기와 적용\n\s+rebiz build <report\.json>/);
+  assert.match(h, /rebiz apply <report\.json> --to <내 프로젝트 폴더>/);
+  assert.match(h, /rebiz video <report\.json>\s+해부 영상\(9:16, 1080x1920\)을 파일로 뽑기/);
   assert.equal(run(dir, 'dissect').status, 2);
   assert.match(run(dir, 'dissect').out, /사용: rebiz <주소>/);
   assert.deepEqual(tree(dir).filter((f) => !f.startsWith('tmp')), [], '안내만 하는 명령은 아무것도 만들지 않는다');

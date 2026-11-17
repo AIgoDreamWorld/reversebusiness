@@ -407,6 +407,7 @@ test('rebiz <주소> --own: 그려 읽고 내 것으로 적는다 (실제 시계
     assert.match(run.stdout, /그려서 읽기:/);
     assert.match(run.stdout, /그려 읽기 .* 임시 프로필로 1장\. 브라우저를 끄고 프로필을 지웠습니다/);
     assert.match(run.stdout, /내 것으로 적습니다 \(--own\)/);
+    assert.match(run.stdout, /다음 {2}rebiz fill \S*report\.json/, '끝에 다음에 칠 명령을 알려 준다');
     const r = JSON.parse(fs.readFileSync(path.join(out, 'report.json'), 'utf8'));
     assert.equal(r.meta.target.relation, 'own');
     assert.equal(r.meta.read.mode, 'rendered');

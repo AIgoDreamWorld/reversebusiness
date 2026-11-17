@@ -5,7 +5,7 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 
 # reversebusiness: 사업 해부
 
-**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page. When REA is installed it switches to a precise mode with three depths: surface (drawn text and structure), flow (expanding clicks only, plus the host names the page tried to contact) and code (names found in already downloaded scripts, skipped when the terms forbid code analysis). Addresses found in code are never called, and anything seen only in code is recorded as a code trace, never as observed. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs.
+**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page. When REA is installed it switches to a precise mode with three depths: surface (drawn text and structure), flow (expanding clicks only, plus the host names the page tried to contact) and code (names found in already downloaded scripts, skipped when the terms forbid code analysis). Addresses found in code are never called, and anything seen only in code is recorded as a code trace, never as observed. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs. Three more tools cover what comes after the dissection: `tools/make-site.mjs` writes a static starting point from the cell 6 spec and the learned section order (guidance text in the copy slots, nothing from the target), `tools/apply-plan.mjs` compares the first screen of an existing project with the learned skeleton and writes the gaps to `rebiz-apply/plan.md`, and `tools/video.mjs` exports the 9:16 dissection video through a headless browser.
 
 ## 지켜야 할 선 (먼저 읽고, 어기는 요청은 거절한다)
 
@@ -212,6 +212,13 @@ node "<이 스킬 폴더>/tools/build-view.mjs" ./report.json --open
 
 ### 6단계. 내 버전 만들기
 
+- 출발점은 도구로 만든다. 6번 칸의 명세와 뼈대의 구역 종류, 순서만 보고 바로 열리는 정적 페이지(index.html, style.css)를 쓴다. 문구 자리는 "여기에 무엇을 쓸지" 안내로 채워져 있으므로, 그 점선 자리를 내 말로 바꿔 쓰고 색과 그림을 내 것으로 정한다.
+
+  ```bash
+  node "<이 스킬 폴더>/tools/make-site.mjs" ./report.json --out ./my-version --topic "<내 사업 주제>"
+  ```
+
+  6번 칸이 비어 있으면 만들지 않는다(5단계를 먼저 한다). 이미 파일이 있는 폴더는 `--force` 없이는 건드리지 않는다. 리포트 옆에 `source.json` 이 있으면 끝나고 겹침 검사를 스스로 돌린다. 뼈대의 `mine` 이 비어 있던 구역에는 만든 구역의 선택자(`#rb-1` 같은)를 리포트에 적어 준다.
 - 넘기는 것은 6번 칸의 명세와 내 디자인 규칙뿐이다. 대상의 주소, 캡처, 받아 둔 파일, `source.json` 은 만드는 쪽에 넘기지 않는다.
 - 배우는 것은 구조다: 구역의 순서, 흐름, 가격을 보여 주는 짜임. 문구, 이름, 색, 글꼴, 그림, 숫자는 전부 새로 정한다.
 - 공부용으로 가상의 주제를 쓸 때는 화면에 예시라고 적는다. 지어낸 후기와 지어낸 실적 숫자는 넣지 않는다. 후기 칸은 빈자리로 둔다.
@@ -239,6 +246,31 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
 - REA 없이 모은 원본 글은 한 줄에 한 문장씩 텍스트 파일로 만들어 `--text 원본글.txt --brand "<이름>" --domain <도메인>` 으로 준다.
 - 실패가 나오면 그 부분을 내 말, 내 이름, 내 자원으로 바꾸고 다시 돌린다. `--allow` 는 법으로 정해진 고지 문구처럼 같을 수밖에 없는 글에만 쓴다.
 - 이 검사가 보지 않는 것: 색, 글꼴, 배치의 닮음. 원본 캡처와 내 버전 캡처를 나란히 놓고 사람이 본다. 통과는 겹치는 글과 주소가 없다는 뜻이지 법적으로 안전하다는 보증이 아니다.
+
+## 해부 다음: 이미 있는 프로젝트에 적용하기, 영상 뽑기
+
+사용자가 "이 구조를 내 사이트에 적용해 줘", "우리 프로젝트에 반영해 줘"라고 하면 새로 만들지 않고 아래 순서로 한다.
+
+1. 계획부터 만든다. 내 첫 화면을 수집기와 같은 구역 분류로 읽어 배운 뼈대와 견준다. 코드는 고치지 않는다.
+
+   ```bash
+   node "<이 스킬 폴더>/tools/apply-plan.mjs" ./report.json --to <내 프로젝트 폴더>
+   ```
+
+   - 결과는 `<내 프로젝트 폴더>/rebiz-apply/plan.md` 와 `plan.json`: 대상에는 있는데 내 첫 화면에는 없는 구역(빈칸), 순서가 다른 구역, 넣을 자리, 그 구역에 무엇을 쓸지.
+   - 프레임워크 프로젝트라 첫 화면의 HTML 파일이 없으면 멈추고 알려 준다. 그때는 `--page <첫 화면 소스 파일>` 을 주거나, 사용자가 띄운 개발 서버 주소를 `--url http://localhost:포트` 로 준다. `--url` 은 내 컴퓨터 주소만 받는다. 바깥 주소를 여기에 넣지 않는다.
+   - 구역의 종류는 규칙으로 붙인 추정이다. 화면을 직접 보고 틀린 곳은 계획을 고쳐 쓴다.
+2. 고치기 전에 확인한다. 프로젝트가 git 저장소인지, 작업 트리가 깨끗한지 본다. 아니면 멈추고 사용자에게 까닭을 알린다. 깨끗하면 새 브랜치 `rebiz/apply-YYYYMMDD` 를 만들고 그 위에서만 고친다.
+3. 계획의 빈칸을 첫 화면에 넣는다. 그 프로젝트의 지금 디자인(색, 글꼴, 클래스 이름을 붙이는 방식)을 따르고, 새 구역의 글은 그 프로젝트에 이미 있는 글과 계획의 "쓸 것"만 보고 내 말로 쓴다. 가격, 숫자, 후기는 지어내지 않고 자리 표시로 둔다. 내 첫 화면에만 있는 구역은 지우지 않는다. 순서는 내 이야기의 흐름에 맞을 때만 옮긴다.
+4. 끝나면 `git diff --stat` 을 사용자에게 보여 주고, 바뀐 파일에 겹침 검사(7단계)를 돌린다. **커밋, push, 배포는 하지 않는다.** 사용자가 바뀐 것을 본 뒤에 정한다.
+
+영상은 화면을 열지 않고 뽑을 수 있다. Chrome 계열 브라우저를 임시 프로필로 잠깐 띄워 해부 화면의 영상 저장을 대신 누르고, 끝나면 브라우저를 끄고 프로필을 지운다. 바깥으로 나가는 요청은 없다.
+
+```bash
+node "<이 스킬 폴더>/tools/video.mjs" ./report.json --mine ./my-version --out ./dissection.mp4
+```
+
+터미널에서 사람이 쓰는 같은 명령은 `rebiz fill`, `rebiz build`, `rebiz apply`, `rebiz video` 다. `rebiz` 의 `--agent` 옵션은 사람이 터미널에서 에이전트에게 한 번 맡길 때 쓰는 것이다. 에이전트인 나는 그 옵션을 붙여 다른 에이전트를 부르지 않고, 맡은 일을 직접 한다.
 
 ## report.json 모양
 
@@ -285,7 +317,8 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
 - [ ] 로그인, 결제, 접근 제한을 넘은 적이 없고, 본 공개 페이지가 한도 안이다.
 - [ ] 내가 띄운 브라우저를 껐고, 모은 원본 자료는 `evidence/` 밖으로 나가지 않았다.
 - [ ] 내 버전을 만들었다면 `check-clone.mjs` 가 통과했고, 두 화면을 나란히 놓고 한 번 봤다.
+- [ ] 이미 있는 프로젝트에 적용했다면 새 브랜치에서만 고쳤고, 커밋, push, 배포를 하지 않았고, `git diff --stat` 을 사용자에게 보여 줬다.
 
 ## 사용자에게 보고하는 법
 
-짧게 다섯 줄: 한 줄 요약, 관찰 / 추정 / 모름 개수, 가장 중요한 모르는 것 3개, 내 버전 차별점 3개(해부만 했으면 "내 버전은 아직 만들지 않음"), `report.json` 과 해부 화면(`report.html`) 위치. 해부 화면의 "영상으로 저장" 단추로 해부 과정을 9:16 영상으로 받을 수 있다는 것도 한 줄로 알린다. 내 버전까지 만들었으면 겹침 검사 결과와 내 버전 위치를 한 줄 더한다. 그리고 "모르는 것 중 사용자가 직접 확인해 줄 수 있는 것"을 물어본다.
+짧게 다섯 줄: 한 줄 요약, 관찰 / 추정 / 모름 개수, 가장 중요한 모르는 것 3개, 내 버전 차별점 3개(해부만 했으면 "내 버전은 아직 만들지 않음"), `report.json` 과 해부 화면(`report.html`) 위치. 해부 화면의 "영상으로 저장" 단추나 `rebiz video report.json` 으로 해부 과정을 9:16 영상으로 받을 수 있다는 것도 한 줄로 알린다. 다음에 할 수 있는 일(`rebiz build` 로 새 사이트 만들기, `rebiz apply` 로 내 프로젝트에 적용)도 한 줄로 알린다. 내 버전까지 만들었으면 겹침 검사 결과와 내 버전 위치를 한 줄 더한다. 그리고 "모르는 것 중 사용자가 직접 확인해 줄 수 있는 것"을 물어본다.

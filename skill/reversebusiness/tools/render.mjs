@@ -144,9 +144,9 @@ const PICK = (max) => `(() => {
 })()`;
 const CLICK = (i) => `(() => { const p = (window.__rebizPicks || [])[${i}]; if (!p || !p.el.isConnected) return false; p.el.click(); return true; })()`;
 
-// 브라우저를 띄운다. open(url, { allow }) 로 한 장을 열어 읽고, 끝나면 close() 를 꼭 부른다.
-// debugPort 를 켜면 내 컴퓨터 안(127.0.0.1)에서만 닿는 디버깅 주소도 함께 연다 (REA 가 붙어서 읽을 때 쓴다).
-export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {}, debugPort = false } = {}) {
+// 브라우저만 띄운다: 임시 프로필, 헤드리스, 파이프 연결. close() 가 브라우저를 끄고 임시 프로필을 지운다.
+// 그려 읽기(openRenderer)와 영상 뽑기(video.mjs)가 함께 쓴다.
+export async function launchBrowser({ browser = findBrowser(), limits = {}, debugPort = false, args = [] } = {}) {
   if (!browser) throw new Error('브라우저를 찾지 못했어요');
   const L = { ...RENDER_LIMITS, ...limits };
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-render-'));
@@ -154,7 +154,7 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
     '--headless=new', '--remote-debugging-pipe', ...(debugPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []), `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--disable-background-networking', '--disable-component-update',
     '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
-    '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', 'about:blank',
+    '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
   let exited = false;
   child.on('exit', () => { exited = true; });
@@ -173,6 +173,13 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
     try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 }); } catch { /* 임시 폴더는 운영체제가 지운다 */ }
     return { exited, profileRemoved: !fs.existsSync(profile) };
   }
+  return { cdp, child, profile, close, browser, limits: L };
+}
+
+// 브라우저를 띄운다. open(url, { allow }) 로 한 장을 열어 읽고, 끝나면 close() 를 꼭 부른다.
+// debugPort 를 켜면 내 컴퓨터 안(127.0.0.1)에서만 닿는 디버깅 주소도 함께 연다 (REA 가 붙어서 읽을 때 쓴다).
+export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {}, debugPort = false } = {}) {
+  const { cdp, child, profile, close, limits: L } = await launchBrowser({ browser, limits, debugPort });
 
   let ua, endpoint = '';
   try {

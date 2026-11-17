@@ -76,6 +76,28 @@ Node 가 REA 가 받는 판보다 낮으면 REA 는 건너뛰고 까닭과 방�
 
 6칸: 누가 왜 돈을 내는가 / 핵심 사용자 흐름 / 화면과 기능 지도 / 기술 구성 / 근거와 모르는 것 / 내 버전 명세.
 
+## 해부 다음에 할 일
+
+해부(`report.json`)가 끝나면 명령 한 줄씩으로 이어 갑니다. 명령마다 끝에 다음에 칠 명령이 한 줄로 나옵니다.
+
+```
+rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz view, rebiz video
+```
+
+| 하고 싶은 일 | 명령 | 하는 일 |
+|---|---|---|
+| 모름 칸 채우기 | `rebiz fill report.json` | 에이전트에게 붙여 넣을 한 문장을 줍니다. `--agent claude` 나 `--agent codex` 를 붙이면 확인을 받은 뒤 내 에이전트를 한 번 실행해, 이미 읽어 둔 자료만으로 채우고 검사 결과를 보여 줍니다 |
+| 새 사이트 만들기 | `rebiz build report.json --topic "내 사업 주제"` | 6번 칸의 명세와 배운 구역의 순서만으로, 바로 열리는 정적 사이트의 출발점(`index.html`, `style.css`)을 만듭니다 |
+| 내 프로젝트에 적용 | `rebiz apply report.json --to ./내-프로젝트` | 내 첫 화면을 배운 뼈대와 견주어 빈칸 목록을 표와 `rebiz-apply/plan.md` 로 남깁니다. `--agent` 를 붙이면 새 git 브랜치에서 에이전트가 고칩니다 |
+| 영상 뽑기 | `rebiz video report.json` | 브라우저를 열지 않고 해부 영상(9:16, 1080x1920, 약 30초)을 파일로 저장합니다 |
+
+- **build 가 쓰는 재료.** 6번 칸에 내 말로 쓴 명세, 뼈대의 구역 종류와 순서, 이 도구의 안내 문구와 중립 디자인(검정 바탕, 얇은 글꼴, 금색 강조)뿐입니다. 대상의 문구, 이미지, 이름, 색, 로고는 쓰지 않고, 문구 자리는 "여기에 무엇을 쓸지" 안내로 채웁니다. 가격, 숫자, 후기는 지어내지 않고 빈자리로 둡니다. 6번 칸이 비어 있으면 만들지 않고 채우는 방법을 알려 줍니다. 리포트 옆에 `source.json` 이 있으면 끝나고 겹침 검사를 스스로 돌려, 겹치면 종료 코드로 알립니다. 이미 파일이 있는 폴더는 `--force` 없이는 건드리지 않습니다.
+- **apply 가 하는 일과 하지 않는 일.** 먼저 하는 것은 견주기뿐입니다: 대상에는 있는데 내 첫 화면에는 없는 구역, 순서가 다른 구역. 첫 화면은 프로젝트의 `index.html` 에서 찾고, 프레임워크 프로젝트라 찾지 못하면 그 사실을 말하고 `--page <파일>` 이나 `--url http://localhost:3000` 을 안내합니다 (`--url` 은 내 컴퓨터 주소만 받습니다). 코드를 고치는 일은 에이전트 몫입니다. `--agent` 를 붙였을 때만, 프로젝트가 git 저장소이고 작업 트리가 깨끗한지 확인하고(아니면 멈추고 까닭을 말합니다) 새 브랜치 `rebiz/apply-날짜` 를 만든 뒤에 맡깁니다. 끝나면 `git diff --stat` 과 바뀐 파일의 겹침 검사를 보여 줍니다. 커밋, push, 배포는 하지 않습니다.
+- **에이전트에 맡기기(`--agent`)는 기본이 아닙니다.** 붙이지 않으면 붙여 넣을 한 문장만 줍니다. 붙이면 "이 단계는 내 에이전트를 한 번 실행하고, 그 에이전트의 사용량을 씁니다"를 보여 주고 한 번 확인받습니다(`--yes` 로 생략). 작업 폴더는 그 일의 폴더 하나입니다. Claude Code 는 `claude -p` 에 허용 도구를 읽기, 그 폴더 안 고치기, `rebiz check` 실행으로 좁혀 부르고, Codex 는 `codex exec --sandbox workspace-write` 로 부릅니다. 권한 확인을 건너뛰거나 샌드박스를 끄는 옵션은 쓰지 않습니다. 시간 한도는 fill 10분, apply 20분이고 `--timeout <분>` 으로 바꿉니다. 에이전트의 실행 파일이 없으면 붙여 넣을 한 문장으로 대신합니다.
+- **video.** 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 임시 프로필의 헤드리스 창으로 띄워 해부 화면의 "영상으로 저장"을 대신 누릅니다. 바깥으로 나가는 요청은 없고, 끝나면 브라우저를 끄고 프로필을 지웁니다. 저장 형식은 브라우저가 정합니다(Chrome 에서는 mp4). 브라우저가 없으면 까닭과 대신 할 일을 알려 줍니다.
+
+실제로 써 본 범위 (0.5.0, macOS, Node 20, Chrome): build, apply, video 는 예시 리포트와 지어낸 프로젝트로 끝까지 돌려 확인했습니다. Codex 에 맡기기는 `fill` 로 한 번 실행해 확인했습니다. Claude Code 에 맡기기는 넘기는 인자만 시험했고 실제 실행은 아직 확인하지 못했습니다.
+
 ## 해부 화면에서 보이는 것
 
 한 파일짜리 HTML 이고 인터넷 없이 열립니다. 원본의 화면 캡처, 문구, 로고는 쓰지 않고 뼈대만 그립니다.
@@ -94,7 +116,7 @@ Node 가 REA 가 받는 판보다 낮으면 REA 는 건너뛰고 까닭과 방�
 
 ![원본 뼈대와 내 버전](docs/compare.png)
 
-**영상으로 저장.** 해부 과정을 9:16 (1080x1920) 약 30초 영상으로 브라우저에서 바로 저장합니다. 소리는 없습니다. 영상 저장이 안 되는 브라우저에서는 안내만 나옵니다.
+**영상으로 저장.** 해부 과정을 9:16 (1080x1920) 약 30초 영상으로 브라우저에서 바로 저장합니다. 소리는 없습니다. 영상 저장이 안 되는 브라우저에서는 안내만 나옵니다. 화면을 열지 않고 뽑으려면 `rebiz video report.json`.
 
 움직임 줄이기 설정을 따르고, 폰 너비에서도 볼 수 있습니다. 화면의 글자는 한국어와 영어를 바꿀 수 있습니다.
 
@@ -163,10 +185,14 @@ rebiz view report.json --mine ./my-version   # 리포트를 해부 화면으로 
 rebiz check report.json                 # 리포트 검사 (해부만 했으면 --dissect-only)
 rebiz clone-check ./my-version --source source.json   # 내 버전이 원본과 겹치는지
 rebiz draft <REA 근거 JSON ...>         # REA 로 모은 근거에서 초안 만들기
+rebiz fill report.json                  # 모름 칸 채우기: 붙여 넣을 한 문장 (--agent claude|codex 로 한 번 맡기기)
+rebiz build report.json                 # 새 사이트의 출발점 만들기 (--out <폴더>, --topic "내 사업 주제", --force)
+rebiz apply report.json --to ./내-프로젝트   # 내 첫 화면과 견준 빈칸 목록 (--page <파일>, --url http://localhost:3000, --agent claude|codex)
+rebiz video report.json                 # 해부 영상(9:16)을 파일로 (--out <파일>, --mine <내 버전 폴더>)
 rebiz --remove                          # 지우기 (REA 는 지우지 않음)
 ```
 
-다음 판(0.5.0)에 들어올 명령의 자리를 잡아 두었습니다: `rebiz build`(내 버전 명세로 새 사이트 만들기), `rebiz apply <내 프로젝트 폴더>`(배운 구조를 이미 있는 프로젝트에 적용), `rebiz video`(해부 영상 뽑기). 지금 실행하면 그때까지 쓸 방법을 알려 줍니다.
+`fill`, `build`, `apply`, `video` 는 리포트 파일을 주지 않으면 지금 폴더의 `report.json` 을 씁니다.
 
 `rebiz` 자리에 `npx github:wonseokjung/reversebusiness` 를 쓰면 설치 없이 같은 명령이 됩니다. 에이전트가 채운 리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 `check` 를 다시 돌립니다. `source.json`, `requests.json`, `evidence/` 폴더에는 원본의 글과 요청 기록이 들어 있으므로 공개 장소에 올리지 않습니다.
 
@@ -182,7 +208,7 @@ rebiz --remove                          # 지우기 (REA 는 지우지 않음)
 ## 개발과 시험
 
 ```bash
-npm test                     # 설치기, 수집기, 검사기, 정밀 모드 시험 (임시 HOME, 내 컴퓨터의 시험용 사이트, REA 는 대역)
+npm test                     # 설치기, 수집기, 검사기, 정밀 모드, 해부 다음 명령 시험 (임시 HOME, 임시 git 저장소, 내 컴퓨터의 시험용 사이트, REA 와 에이전트는 대역)
 node bin/rebiz.mjs --dry-run
 ```
 
@@ -229,6 +255,24 @@ In a terminal with nobody to ask (for example when an agent runs the command), i
 | 3. Build my version | Build from the cell 6 spec only. Copy, names, colors and images are all new | your version |
 | 4. Check | Look for shared sentences, names and asset URLs | pass, or a list of overlaps |
 
+## After the dissection
+
+Once `report.json` exists, each next step is one command, and every command ends with the next line to type: `rebiz <URL>` -> `rebiz fill` -> `rebiz build` or `rebiz apply` -> `rebiz view`, `rebiz video`.
+
+| Goal | Command | What it does |
+|---|---|---|
+| Fill the unknowns | `rebiz fill report.json` | Prints one sentence to paste into your agent. With `--agent claude` or `--agent codex` it asks once, runs your agent once on the material already collected, then shows the check result |
+| Start a new site | `rebiz build report.json --topic "my business"` | Writes a static starting point (`index.html`, `style.css`) from the cell 6 spec and the learned section order only |
+| Apply to my project | `rebiz apply report.json --to ./my-project` | Compares your first screen with the learned skeleton and writes the gaps as a table and `rebiz-apply/plan.md`. With `--agent`, your agent edits on a new git branch |
+| Export the video | `rebiz video report.json` | Saves the 9:16 dissection video (1080x1920, about 30 seconds) without opening a browser window |
+
+- **build** uses only the spec you wrote in cell 6, the kinds and order of the learned sections, and this tool's own guidance text and neutral design. No copy, images, names, colors or logos of the target. Copy slots say what to write there; prices, numbers and testimonials are left empty, never invented. With an empty cell 6 it builds nothing and tells you how to fill it. When `source.json` sits next to the report it runs the overlap check by itself and exits non-zero on overlap. A folder that already has files is left alone unless `--force` is given.
+- **apply** first only compares: sections the target has and your first screen lacks, and sections in a different order. It looks for `index.html`; for a framework project it says so and points to `--page <file>` or `--url http://localhost:3000` (local addresses only). Editing code is the agent's job. Only with `--agent` does it check that the project is a git repository with a clean working tree (otherwise it stops and says why), create the branch `rebiz/apply-YYYYMMDD`, and hand over. Afterwards it shows `git diff --stat` and runs the overlap check on the changed files. It never commits, pushes or deploys.
+- **Delegating (`--agent`) is not the default.** Without it you get a sentence to paste. With it, the tool states that the step runs your agent once and uses that agent's quota, and asks once (`--yes` skips the question). The working folder is the one folder of that job. Claude Code is called as `claude -p` with a narrow allowed tool list (read, edit inside that folder, run `rebiz check`); Codex as `codex exec --sandbox workspace-write`. Options that skip permission checks or turn the sandbox off are never used. Time limits are 10 minutes for fill and 20 for apply (`--timeout <minutes>`). When the agent CLI is missing, the paste sentence is the fallback.
+- **video** opens a headless Chrome, Chromium, Edge or Brave with a throwaway profile and presses the view's own save button. Nothing leaves the machine, and the browser is closed and the profile deleted afterwards. The browser decides the format (mp4 in Chrome). Without a browser it says why and what to do instead.
+
+Tried in real use (0.5.0, macOS, Node 20, Chrome): build, apply and video end to end with the example report and a made-up project; delegation to Codex once with `fill`. Delegation to Claude Code is covered by argument tests only and has not been run for real yet.
+
 ## What the view shows
 
 A single HTML file that works offline. It never uses screenshots, copy or logos of the original, only wireframes.
@@ -236,7 +280,7 @@ A single HTML file that works offline. It never uses screenshots, copy or logos 
 - **Dissection scene**: page sections appear as wire blocks and pull apart into layers labeled attract, value, pay and return.
 - **Money flow**: arrive, first value, sign-up, payment, return. Each step carries its status and evidence numbers. Unknown links are dashed.
 - **Skeleton to my version**: a slider turns the wireframe into your own page.
-- **Save as video**: the dissection as a 9:16 (1080x1920) video of about 28 seconds, saved in the browser. No sound. Browsers that cannot record show a notice instead.
+- **Save as video**: the dissection as a 9:16 (1080x1920) video of about 30 seconds, saved in the browser. No sound. Browsers that cannot record show a notice instead. `rebiz video report.json` does the same without opening a window.
 
 It respects the reduced motion setting and works at phone width.
 

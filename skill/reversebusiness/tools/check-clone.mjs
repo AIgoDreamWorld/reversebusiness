@@ -77,7 +77,9 @@ function listFiles(root) {
   return out.sort();
 }
 
-function loadSource(o) {
+// 원본 글 묶음을 읽는다. o: { sources: [source.json ...], texts: [글 파일 ...], brands: [], domains: [] }
+export function loadSource(o) {
+  o = { sources: [], texts: [], brands: [], domains: [], ...o };
   const src = { texts: [], names: [...o.brands], domains: [...o.domains], assets: [] };
   for (const f of o.sources) {
     const j = JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -91,7 +93,8 @@ function loadSource(o) {
   return { texts: u(src.texts), names: u(src.names), domains: u(src.domains), assets: u(src.assets) };
 }
 
-export function checkClone(root, source, { n = 5, allow = [] } = {}) {
+// only 를 주면 그 파일들만 본다 (폴더 기준 상대 경로). 이미 있는 프로젝트에서 바뀐 파일만 볼 때 쓴다.
+export function checkClone(root, source, { n = 5, allow = [], only = null } = {}) {
   const fails = [];
   const warns = [];
   const notes = [];
@@ -119,7 +122,7 @@ export function checkClone(root, source, { n = 5, allow = [] } = {}) {
   for (const a of source.assets) { const b = a.split('?')[0].split('/').pop().toLowerCase(); if (b && ASSET_EXT.test(b)) assetNames.set(b, a); }
   const domainRe = source.domains.filter((d) => d.includes('.')).map((d) => d.toLowerCase());
 
-  const files = listFiles(root);
+  const files = Array.isArray(only) ? [...new Set(only.map((f) => path.resolve(root, f)))].filter((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } }).sort() : listFiles(root);
   let textFiles = 0;
   let checkedWords = 0;
   for (const file of files) {

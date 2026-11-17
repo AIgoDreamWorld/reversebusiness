@@ -28,6 +28,7 @@ import { scrub, cleanUrl, PRICE, recordsOf, readInspect, dropSecrets } from './f
 import { reaRunner, runRea, reaSkillPresent, REA_REPO } from './rea-bridge.mjs';
 import { classifyHosts, scanScripts, readBundleFacts, termsForbidCodeReading, looksBehindLogin, SERVICE_KINDS } from './deep.mjs';
 import { findBrowser, openRenderer, isTracker } from './render.mjs';
+import { KIND_NAME } from './kinds.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_URL = 'https://github.com/wonseokjung/reversebusiness';
@@ -314,7 +315,6 @@ function kindOf(node) {
   if (count(node, 'img', 'picture') >= 1 && text.length < 160) return 'media';
   return 'text';
 }
-const KIND_NAME = { media: '영상이나 그림 구역', headline: '큰 제목 구역', price: '가격 구역', nav: '이동 메뉴', numbers: '숫자로 보여 주는 구역', list: '목록 구역', notice: '안내 구역', quotes: '후기 구역', faq: '자주 묻는 물음', cta: '신청 단추 구역', footer: '꼬리말', text: '글 구역' };
 export function buildSkeleton(body) {
   let list = meaningful(body);
   for (let step = 0; step < 10; step += 1) {
