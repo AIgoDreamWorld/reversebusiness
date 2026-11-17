@@ -301,8 +301,10 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
         const m = /DevTools listening on ws:\/\/(?:127\.0\.0\.1|localhost):(\d+)(\/devtools\/\S+)/i.exec(errLog);
         if (m) { port = Number(m[1]); wsPath = m[2]; break; }
         if (fs.existsSync(portFile)) {
-          const lines = fs.readFileSync(portFile, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-          if (lines.length >= 2 && Number(lines[0]) > 0) { port = Number(lines[0]); wsPath = lines[1]; break; }
+          try {
+            const lines = fs.readFileSync(portFile, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+            if (lines.length >= 2 && Number(lines[0]) > 0) { port = Number(lines[0]); wsPath = lines[1]; break; }
+          } catch { /* Windows 에서 Chrome 이 DevToolsActivePort 를 막 쓰는 중일 수 있다 */ }
         }
         if (exited) break;
         await sleep(50);
@@ -337,9 +339,12 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       let endpoint = '';
       if (debugPort) {
         const file = path.join(profile, 'DevToolsActivePort');
-        for (let i = 0; i < 40 && !fs.existsSync(file); i += 1) await sleep(100);
-        const port = fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8').split('\n')[0]) : 0;
-        if (port > 0) endpoint = `http://127.0.0.1:${port}`;
+        for (let i = 0; i < 40; i += 1) {
+          let port = 0;
+          try { if (fs.existsSync(file)) port = Number(fs.readFileSync(file, 'utf8').split(/\r?\n/)[0]); } catch { /* 쓰기 잠금 중 */ }
+          if (port > 0) { endpoint = `http://127.0.0.1:${port}`; break; }
+          await sleep(100);
+        }
       }
       started = { ...launched, ua, endpoint };
       break;
