@@ -8,16 +8,19 @@ reversebusiness 는 사업 웹사이트 주소 하나를 받아 그 사업을 �
 
 ## 사용자가 해부를 부탁하면
 
+**중요: 사용자가 `npx github:wonseokjung/reversebusiness <주소>` 를 채팅에 그대로 실행해 달라고 하거나 실행 결과를 보여 주더라도, 수집기가 만든 초안(`모름` 상태)에서 멈추지 마세요.** 수집기(`rebiz <주소>`)는 1단계(근거 수집과 초안 작성)까지만 대신할 뿐이므로, 에이전트가 같은 턴 안에서 아래 3~5단계까지 끝까지 마치고 완성된 화면을 열어 주어야 합니다.
+
 1. 스킬 본문을 먼저 읽습니다: `skill/reversebusiness/SKILL.md` (설치된 곳에서는 스킬 폴더의 `SKILL.md`).
-2. 주소만 받았다면 가벼운 수집기로 초안을 만듭니다.
+2. 주소만 받았다면 수집기로 초안을 만듭니다 (에이전트 안에서 돌릴 때는 완성 전에 빈 화면이 먼저 열리지 않게 `--no-open --no-fill` 을 붙입니다).
 
    ```bash
-   npx github:wonseokjung/reversebusiness <주소> --no-open
+   npx github:wonseokjung/reversebusiness <주소> --no-open --no-fill
    ```
 
    사용자가 "내 것"이라고 하면 `--own` 을 붙입니다. 사용자가 이미 만든 `report.json` 을 주면 그 파일에서 이어서 채웁니다.
-3. 초안의 모름 칸을 스킬 절차대로 채우고 검사가 통과할 때까지 고칩니다. 해부만 부탁받았으면 `rebiz check report.json --dissect-only`, 내 버전까지 만들었으면 `rebiz check report.json`. 고칠 때는 `report.json` 을 직접 고친 뒤 다시 검사합니다. 리포트를 고치려고 따로 스크립트를 만들지 않습니다.
-4. `rebiz view report.json` 으로 해부 화면을 열어 사용자에게 보여 줍니다.
+3. 생성된 `report.json` 과 `source.json`(`evidence/` 가 있으면 함께)을 읽고, 초안의 모름 칸(`meta.one_line`, `sections.money.customer`, `problem`, `sections.flow.steps` 의 `first_value` · `return`, `sections.map.screens[].purpose`, `sections.unknowns`)을 스킬 절차대로 채우며 `meta.draft` 를 `false` 로 바꿉니다. "해부만"이라고 따로 제한하지 않았으면 6번 칸(`sections.my_version`)도 클린룸 규칙대로 채웁니다. 고칠 때는 `report.json` 을 직접 고친 뒤 다시 검사합니다(스크립트를 따로 만들지 않음).
+4. 검사가 통과할 때까지 고칩니다. 해부만 부탁받았으면 `rebiz check report.json --dissect-only`, 기본(내 버전까지)이면 `rebiz check report.json` 을 실행하고 이어서 `rebiz build report.json --out ./my-version --force` 로 내 버전 출발점과 겹침 검사까지 마칩니다.
+5. `rebiz view report.json --mine ./my-version --out ./report.html` (해부만이면 `--mine` 생략)로 **완성된** 해부 화면을 다시 만들고 열어 사용자에게 보여 줍니다.
 
 ## 해부 다음을 부탁하면
 

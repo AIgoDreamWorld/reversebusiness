@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startSite, fakeClock } from './fixtures/server.mjs';
 import { collect, buildDraftFromPages, writeOutputs } from '../skill/reversebusiness/tools/collect.mjs';
@@ -30,16 +30,33 @@ const read = (...p) => fs.readFileSync(path.join(...p), 'utf8');
 const LOGS = tmp('rebiz-agentlog-');
 test.after(() => fs.rmSync(LOGS, { recursive: true, force: true }));
 
-// rebiz 를 임시 HOME 에서 돌린다. 에이전트 CLI 는 없는 것으로 두고(진짜 claude, codex 를 부르지 않는다), agent 를 주면 대역을 쓴다.
-function run(dir, args, { agent = '', env: extra = {}, cwd = dir } = {}) {
+function prepRunEnv(dir, agent, extra) {
   const log = path.join(LOGS, `${path.basename(dir)}.log`);
   const env = { ...process.env, HOME: dir, USERPROFILE: dir, NO_COLOR: '1', TMPDIR: path.join(dir, 'tmp'), REBIZ_REA: 'none', REBIZ_NODE: 'v20.0.0', REBIZ_AGENT_CLI: 'none', GIT_CONFIG_GLOBAL: path.join(dir, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1', ...extra };
   delete env.REBIZ_AGENT_RUNNER; delete env.REBIZ_REA_INSTALLER; delete env.REBIZ_REA_RUNNER; delete env.CLAUDE_CONFIG_DIR; delete env.CODEX_HOME;
   if (agent) { env.REBIZ_AGENT_RUNNER = JSON.stringify(FAKE_AGENT); env.FAKE_AGENT_MODE = agent; env.FAKE_AGENT_LOG = log; }
   fs.mkdirSync(env.TMPDIR, { recursive: true });
+  return { env, log };
+}
+const readCalls = (log) => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+
+// rebiz 를 임시 HOME 에서 돌린다. 에이전트 CLI 는 없는 것으로 두고(진짜 claude, codex 를 부르지 않는다), agent 를 주면 대역을 쓴다.
+function run(dir, args, { agent = '', env: extra = {}, cwd = dir } = {}) {
+  const { env, log } = prepRunEnv(dir, agent, extra);
   const r = spawnSync(process.execPath, [CLI, ...args], { env, cwd, encoding: 'utf8' });
-  const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
-  return { status: r.status, out: `${r.stdout}${r.stderr}`, calls };
+  return { status: r.status, out: `${r.stdout}${r.stderr}`, calls: readCalls(log) };
+}
+async function runAsync(dir, args, { agent = '', env: extra = {}, cwd = dir } = {}) {
+  const { env, log } = prepRunEnv(dir, agent, extra);
+  const r = await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI, ...args], { env, cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('error', reject);
+    child.on('close', (status) => resolve({ status, out }));
+  });
+  return { ...r, calls: readCalls(log) };
 }
 // 임시 폴더에 예시 리포트를 놓는다. edit 로 고쳐 쓴다.
 function withReport(edit = (r) => r) {
@@ -610,4 +627,53 @@ test('도움말: build, apply, video, fill 이 실제 명령으로 나오고, �
     assert.match(v.out, /다음 {2}rebiz video report\.json/);
     assert.equal(JSON.parse(read(ROOT, 'package.json')).version, '0.5.0');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('fillPrompt 는 includeSpec 일 때 6번 칸 명세 지시와 주제를 함께 넣는다', () => {
+  const prompt = fillPrompt({
+    report: 'report.json',
+    skill: '',
+    checkCmd: 'rebiz check report.json',
+    materials: ['source.json'],
+    includeSpec: true,
+    topic: '작은 화분 구독',
+  });
+  assert.match(prompt, /작은 화분 구독/);
+  assert.match(prompt, /sections\.my_version/);
+  assert.doesNotMatch(prompt, /sections\.my_version 은 건드리지 않는다/);
+});
+
+test('dissect <주소> 는 --agent 로 한 번에 해부, 명세, 내 버전 출발점, 완성된 report.html 까지 만든다', async () => {
+  const site = await startSite({
+    routes: {
+      '/': (_req, _res, html) => html('<!doctype html><html><head><title>작은 그릇 가게</title></head><body><h1>매달 하나씩 보내는 그릇</h1><p>월 29,000원 정기 구독으로 매달 받아 보세요.</p><button>시작하기</button></body></html>'),
+    },
+  });
+  const dir = tmp('rebiz-dissect-e2e-');
+  const outDir = path.join(dir, 'site-out');
+  const draftDir = path.join(dir, 'draft-out');
+  try {
+    // 1) --agent 없이 비대화형(테스트) 실행 시 외부 에이전트를 몰래 부르지 않고 초안만 만든다.
+    const raw = await runAsync(dir, [site.origin, '--no-open', '--no-render', '--out', draftDir]);
+    assert.equal(raw.status, 0, raw.out);
+    assert.equal(raw.calls.length, 0);
+    const rawReport = JSON.parse(read(draftDir, 'report.json'));
+    assert.equal(rawReport.sections.money.customer[0].status, 'unknown');
+
+    // 2) --agent claude --yes 를 주면 수집 뒤 채우기 + 6번 칸 + my-version + 완성된 report.html 까지 한 번에 끝낸다.
+    const full = await runAsync(dir, [site.origin, '--agent', 'claude', '--yes', '--no-open', '--no-render', '--topic', '작은 화분 구독', '--out', outDir], { agent: 'dissect' });
+    assert.equal(full.status, 0, full.out);
+    assert.equal(full.calls.length, 1);
+    assert.match(full.calls[0].prompt, /작은 화분 구독/);
+    const fullReport = JSON.parse(read(outDir, 'report.json'));
+    assert.equal(fullReport.meta.draft, false);
+    assert.equal(fullReport.sections.money.customer[0].status, 'inferred');
+    assert.equal(fullReport.sections.my_version.working_name, '골목 화분 구독 (가상의 예시)');
+    assert.ok(fs.existsSync(path.join(outDir, 'my-version', 'index.html')));
+    const viewHtml = read(outDir, 'report.html');
+    assert.match(viewHtml, /골목 화분 구독 \(가상의 예시\)/);
+  } finally {
+    await site.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

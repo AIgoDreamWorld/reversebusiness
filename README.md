@@ -29,11 +29,13 @@ CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (macOS · Windows 
    reversebusiness 로 <궁금한 사업의 주소> 를 해부해 줘
    ```
 
-에이전트 없이 바로 확인하려면 주소를 함께 넘깁니다. 공개 페이지를 읽어 해부 화면을 바로 열어 줍니다. (컴퓨터에 로컬 `rea` 가 이미 있으면 정밀 모드로, 없으면 자체 브라우저/HTML 수집기로 읽습니다.)
+주소 하나만 바로 넘겨 해부할 수도 있습니다. 공개 페이지를 읽어 해부 화면을 바로 열어 줍니다. (컴퓨터에 로컬 `rea` 가 이미 있으면 정밀 모드로, 없으면 자체 브라우저/HTML 수집기로 읽습니다.)
 
 ```bash
 npx github:wonseokjung/reversebusiness https://example.com
 ```
+
+컴퓨터에 `claude` 나 `codex` CLI 가 있으면 수집 직후 **"해부·내 버전 명세까지 한 번에 채울까요? [Y/n]"** 하고 묻고, 한 번에 1~6번 칸 + `my-version` 출발점 + 완성된 `report.html` 까지 이어서 엽니다. (확인 없이 맡기려면 `--agent claude --yes`, 초안만 빠르게 보려면 `--no-fill` 을 붙입니다. 바이브코딩 툴 채팅창에 맡길 때는 에이전트가 초안 수집 뒤 나머지 칸과 `my-version` 까지 자동으로 끝냅니다.)
 
 에이전트가 대신 실행할 때처럼 물어볼 사람이 없는 터미널에서는 `--yes` 를 붙여야 설치합니다. 붙이지 않으면 바뀔 것만 보여 주고 예시 화면을 엽니다.
 
@@ -92,7 +94,7 @@ rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz vi
 
 - **build 가 쓰는 재료.** 6번 칸에 내 말로 쓴 명세, 뼈대의 구역 종류와 순서, 이 도구의 안내 문구와 중립 디자인(검정 바탕, 얇은 글꼴, 금색 강조)뿐입니다. 대상의 문구, 이미지, 이름, 색, 로고는 쓰지 않고, 문구 자리는 "여기에 무엇을 쓸지" 안내로 채웁니다. 가격, 숫자, 후기는 지어내지 않고 빈자리로 둡니다. 6번 칸이 비어 있으면 만들지 않고 채우는 방법을 알려 줍니다. 리포트 옆에 `source.json` 이 있으면 끝나고 겹침 검사를 스스로 돌려, 겹치면 종료 코드로 알립니다. 이미 파일이 있는 폴더는 `--force` 없이는 건드리지 않습니다.
 - **apply 가 하는 일과 하지 않는 일.** 먼저 하는 것은 견주기뿐입니다: 대상에는 있는데 내 첫 화면에는 없는 구역, 순서가 다른 구역. 첫 화면은 프로젝트의 `index.html` 에서 찾고, 프레임워크 프로젝트라 찾지 못하면 그 사실을 말하고 `--page <파일>` 이나 `--url http://localhost:3000` 을 안내합니다 (`--url` 은 내 컴퓨터 주소만 받습니다). 코드를 고치는 일은 에이전트 몫입니다. `--agent` 를 붙였을 때만, 프로젝트가 git 저장소이고 작업 트리가 깨끗한지 확인하고(아니면 멈추고 까닭을 말합니다) 새 브랜치 `rebiz/apply-날짜` 를 만든 뒤에 맡깁니다. 끝나면 `git diff --stat` 과 바뀐 파일의 겹침 검사를 보여 줍니다. 커밋, push, 배포는 하지 않습니다.
-- **에이전트에 맡기기(`--agent`)는 기본이 아닙니다.** 붙이지 않으면 붙여 넣을 한 문장만 줍니다. 붙이면 "이 단계는 내 에이전트를 한 번 실행하고, 그 에이전트의 사용량을 씁니다"를 보여 주고 한 번 확인받습니다(`--yes` 로 생략). 작업 폴더는 그 일의 폴더 하나입니다. Claude Code 는 `claude -p` 에 허용 도구를 읽기, 그 폴더 안 고치기, `rebiz check` 실행으로 좁혀 부르고, Codex 는 `codex exec --sandbox workspace-write` 로 부릅니다. 권한 확인을 건너뛰거나 샌드박스를 끄는 옵션은 쓰지 않습니다. 시간 한도는 fill 10분, apply 20분이고 `--timeout <분>` 으로 바꿉니다. 에이전트의 실행 파일이 없으면 붙여 넣을 한 문장으로 대신합니다.
+- **에이전트에 맡기기(`--agent`).** `rebiz <주소> --agent claude` 처럼 붙이거나 대화형 터미널에서 자동 완성 `[Y/n]` 에 동의하면 "이 단계는 내 에이전트를 한 번 실행하고, 그 에이전트의 사용량을 씁니다"를 보여 준 뒤 실행합니다(`--yes` 로 확인 생략, `--no-fill` 로 제안 생략). 작업 폴더는 그 일의 폴더 하나입니다. Claude Code 는 `claude -p` 에 허용 도구를 읽기, 그 폴더 안 고치기, `rebiz check` 실행으로 좁혀 부르고, Codex 는 `codex exec --sandbox workspace-write` 로 부릅니다. 권한 확인을 건너뛰거나 샌드박스를 끄는 옵션은 쓰지 않습니다. 시간 한도는 fill/dissect 10분, apply 20분이고 `--timeout <분>` 으로 바꿉니다. 에이전트의 실행 파일이 없으면 붙여 넣을 한 문장으로 대신합니다.
 - **video.** 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 임시 프로필의 헤드리스 창으로 띄워 해부 화면의 "영상으로 저장"을 대신 누릅니다. 바깥으로 나가는 요청은 없고, 끝나면 브라우저를 끄고 프로필을 지웁니다. 저장 형식은 브라우저가 정합니다(Chrome 에서는 mp4). 브라우저가 없으면 까닭과 대신 할 일을 알려 줍니다.
 
 ## 해부 화면에서 보이는 것
@@ -119,7 +121,7 @@ rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz vi
 
 ## 주소를 바로 읽을 때 지키는 것
 
-`rebiz <주소>` 는 에이전트 없이 돕니다. 아래는 가벼운 모드와 정밀 모드 모두에 적용됩니다.
+`rebiz <주소>` 의 수집 단계는 에이전트 없이 돕니다. 아래는 가벼운 모드와 정밀 모드 모두에 적용됩니다.
 
 - robots.txt 를 가장 먼저 받습니다. 막혀 있으면 받지 않고 멈춥니다.
 - 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장.
@@ -238,6 +240,8 @@ Without an agent, add a URL. When REA is present the precise mode turns on by it
 ```bash
 npx github:wonseokjung/reversebusiness https://example.com
 ```
+
+컴퓨터에 `claude` 나 `codex` CLI 가 있으면 수집 직후 **"해부·내 버전 명세까지 한 번에 채울까요? [Y/n]"** 하고 묻고, 한 번에 1~6번 칸 + `my-version` 출발점 + 완성된 `report.html` 까지 이어서 엽니다. (확인 없이 맡기려면 `--agent claude --yes`, 초안만 빠르게 보려면 `--no-fill` 을 붙입니다. 바이브코딩 툴 채팅창에 맡길 때는 에이전트가 초안 수집 뒤 나머지 칸과 `my-version` 까지 자동으로 끝냅니다.)
 
 In a terminal with nobody to ask (for example when an agent runs the command), it installs only with `--yes`. Other options: `--dry-run`, `--remove`, `--no-open`, `--agent claude,codex,cursor,gemini,antigravity,agents`.
 

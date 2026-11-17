@@ -18,22 +18,31 @@ process.stdin.on('end', () => {
   if (mode === 'sleep') { setTimeout(() => process.exit(0), 600000); return; }
   if (mode === 'break') { fs.writeFileSync(report, '{ 깨진 json'); process.exit(0); }
   if (mode === 'stray') fs.writeFileSync(path.join(cwd, 'extra.txt'), '리포트 말고 다른 파일\n');
-  if (mode === 'fill' || mode === 'stray') {
-    // 모름 한 칸을 근거가 붙은 추정으로 바꾼다.
+  const specFixture = {
+    working_name: '골목 화분 구독 (가상의 예시)', same_problem: '한 장짜리 페이지에서 믿음을 주며 정기 구독을 판다.', who: '가상의 예시다. 집에서 작은 화분을 키우는 사람.',
+    mvp: ['무엇을 받는지 보여 주는 한 장면', '달마다 받는 것 세 가지', '가격과 바꾸는 방법'],
+    differences: [{ title: '대상', text: '집에서 화분을 키우는 사람이다.' }, { title: '형태', text: '정적인 한 장이다.' }, { title: '유통', text: '동네 배달만 한다.' }],
+    not_taken: ['문구, 이름, 그림, 색을 하나도 옮기지 않는다'],
+  };
+  if (mode === 'fill' || mode === 'stray' || mode === 'dissect') {
     const r = load();
     const ev = (r.evidence[0] || {}).id;
-    const c = (r.sections.money.customer || []).find((x) => x.status === 'unknown');
-    if (c) { c.text = '읽어 둔 자료의 결과물 예시로 보아 혼자 가게를 꾸리는 사람을 겨냥한 것으로 추정한다.'; c.status = 'inferred'; c.evidence = [ev]; }
+    const infer = (item, text) => {
+      if (item && item.status === 'unknown') { item.text = text; item.status = 'inferred'; item.evidence = ev ? [ev] : []; }
+    };
+    (r.sections.money.customer || []).forEach((x) => infer(x, '읽어 둔 자료의 결과물 예시로 보아 혼자 가게를 꾸리는 사람을 겨냥한 것으로 추정한다.'));
+    if (mode === 'dissect') {
+      r.meta.draft = false;
+      r.meta.one_line = '작은 그릇 정기 구독 서비스를 공개 페이지 기준으로 해부한 리포트다.';
+      (r.sections.money.problem || []).forEach((x) => infer(x, '읽어 둔 자료로 보아 빠른 결과 확인이 필요한 문제를 푸는 것으로 추정한다.'));
+      (r.sections.flow?.steps || []).forEach((x) => infer(x, '읽어 둔 자료상 첫 화면 탐색과 재방문 안내로 이어지는 것으로 추정한다.'));
+      r.sections.my_version = specFixture;
+    }
     save(r);
   }
   if (mode === 'spec') {
     const r = load();
-    r.sections.my_version = {
-      working_name: '골목 화분 구독 (가상의 예시)', same_problem: '한 장짜리 페이지에서 믿음을 주며 정기 구독을 판다.', who: '가상의 예시다. 집에서 작은 화분을 키우는 사람.',
-      mvp: ['무엇을 받는지 보여 주는 한 장면', '달마다 받는 것 세 가지', '가격과 바꾸는 방법'],
-      differences: [{ title: '대상', text: '집에서 화분을 키우는 사람이다.' }, { title: '형태', text: '정적인 한 장이다.' }, { title: '유통', text: '동네 배달만 한다.' }],
-      not_taken: ['문구, 이름, 그림, 색을 하나도 옮기지 않는다'],
-    };
+    r.sections.my_version = specFixture;
     save(r);
   }
   if (mode === 'apply') {

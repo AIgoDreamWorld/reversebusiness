@@ -43,7 +43,7 @@ const looksLikeUrl = (a) => /^https?:\/\//i.test(a) || /^(localhost|\d{1,3}(\.\d
 // 명령 표. 일의 순서대로 묶는다: 읽기 -> 검사 -> 보기 -> 만들기와 적용 -> 설치.
 // planned 를 붙이면 다음 판에 들어올 자리가 된다 (안내만 하고, 다른 뜻으로 쓰지 않도록 이름을 잡아 둔다).
 const COMMAND_TABLE = [
-  { name: 'dissect', group: 'read', usage: 'rebiz <주소>', text: 'robots.txt 확인 뒤 공개 페이지를 읽고 해부 화면 열기 (rebiz dissect <주소> 와 같음. --own, --light, --no-render)' },
+  { name: 'dissect', group: 'read', usage: 'rebiz <주소>', text: 'robots.txt 확인 뒤 공개 페이지를 읽고 해부 화면 열기 (--agent claude|codex 로 끝까지 자동 완성, --no-fill, --own, --light, --no-render)' },
   { name: 'draft', group: 'read', usage: 'rebiz draft <근거 JSON ...>', text: 'REA 근거와 정밀 모드 기록에서 초안 만들기 (옵션은 draft --help)', pass: 'from-rea.mjs' },
   { name: 'fill', group: 'read', usage: 'rebiz fill <report.json>', text: '모름 칸 채우기: 에이전트에게 붙여 넣을 한 문장을 주거나, --agent claude|codex 로 한 번 맡기기' },
   { name: 'collect', group: 'read', hidden: true, pass: 'collect.mjs' },
@@ -62,7 +62,7 @@ const COMMAND_TABLE = [
 const GROUPS = [['read', '읽기'], ['check', '검사'], ['see', '보기'], ['make', '만들기와 적용'], ['setup', '설치']];
 const commandOf = (word) => COMMAND_TABLE.find((c) => c.name === word || (c.alias || []).includes(word)) || null;
 function parse(argv) {
-  const o = { cmd: '', agents: [], dirs: [], rest: [], dryRun: false, force: false, project: false, open: true, yes: false, lang: '', pages: 5, relation: 'third-party', render: 'auto', dissectOnly: false, noRea: false, light: false };
+  const o = { cmd: '', agents: [], dirs: [], rest: [], dryRun: false, force: false, project: false, open: true, yes: false, lang: '', pages: 5, relation: 'third-party', render: 'auto', dissectOnly: false, noRea: false, light: false, noFill: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const next = () => String(argv[++i] ?? '');
@@ -75,6 +75,7 @@ function parse(argv) {
     else if (a === '--force') o.force = true;
     else if (a === '--project') o.project = true;
     else if (a === '--no-open') o.open = false;
+    else if (a === '--no-fill') o.noFill = true;
     else if (a === '--agent') o.agents.push(...next().split(',').map((s) => s.trim()).filter(Boolean));
     else if (a === '--dir') o.dirs.push(next());
     else if (a === '--out') o.out = next();
@@ -120,7 +121,7 @@ function help() {
   say('사업 웹사이트 주소 하나를 넣으면 그 사업을 해부합니다. 읽기, 해부(6칸), 내 버전 만들기, 검사.');
   say();
   say(`  ${NPX}                 에이전트에 스킬 설치 + 예시 해부 화면 열기`);
-  say(`  ${NPX} <주소>          그 주소를 바로 해부 (에이전트 없이, 공개 페이지 최대 5장)`);
+  say(`  ${NPX} <주소>          그 주소를 바로 해부 (에이전트가 있으면 확인 뒤 끝까지 완성, --no-fill 로 초안만)`);
   say(T.dim('  아래의 rebiz 자리에 위 npx 줄을 쓰면 설치 없이 같은 명령이 됩니다.'));
   say();
   for (const [key, title] of GROUPS) {
@@ -146,7 +147,8 @@ function help() {
   say('  --dissect-only   check 에서 내 버전 칸이 비어 있어도 통과 (해부만 했을 때)');
   say('  --topic <말>     build 에서 내 사업의 주제       --to <폴더>   apply 할 내 프로젝트 폴더');
   say('  --page <파일>    apply 에서 내 첫 화면 파일      --url <주소>  apply 에서 내 개발 서버 주소 (내 컴퓨터 주소만)');
-  say('  --agent claude|codex   fill, build, apply 에서 판단이 필요한 단계를 내 에이전트에 한 번 맡기기 (확인 뒤 실행, --timeout <분>)');
+  say('  --agent claude|codex   dissect, fill, build, apply 에서 판단이 필요한 단계를 내 에이전트에 한 번 맡기기 (확인 뒤 실행, --timeout <분>)');
+  say('  --no-fill              rebiz <주소> 에서 에이전트 자동 완성 제안을 건너뛰고 초안만 열기');
   say();
   say('해부 다음에 할 일');
   say('  rebiz <주소>  ->  rebiz fill  ->  rebiz build 또는 rebiz apply  ->  rebiz view, rebiz video');
@@ -277,7 +279,69 @@ async function check(o) {
   if (errors.length) process.exitCode = 1;
 }
 
+const reportMaterials = (dir) => ['source.json', 'evidence'].filter((f) => fs.existsSync(path.join(dir, f))).map((f) => (f === 'evidence' ? 'evidence/' : f));
+
+// 수집 직후 에이전트에 맡겨 1~6번 칸을 채우고, 내 버전 출발점까지 한 번에 만든다.
+async function completeDissect(o, ag, dir, checkReport) {
+  if (o.noFill) return { filled: null, mineDir: '', detected: '' };
+  const detected = !ag.name && process.stdin.isTTY && process.stdout.isTTY && process.env.REBIZ_NO_AUTO_FILL !== '1'
+    ? (findAgentCli('claude') ? 'claude' : findAgentCli('codex') ? 'codex' : '')
+    : '';
+  const agentName = ag.name || detected;
+  if (!agentName) return { filled: null, mineDir: '', detected: '' };
+  const reportFile = path.join(dir, 'report.json');
+  const base = path.basename(reportFile);
+  const includeSpec = !o.dissectOnly;
+  const d = await delegateReport(o, agentName, reportFile, {
+    what: includeSpec ? '모름 칸 채우고 내 버전 명세(6번 칸)까지 완성하기' : '모름 칸을 읽어 둔 자료만으로 채우기',
+    tag: 'dissect',
+    minutes: DEFAULT_MINUTES.fill,
+    prompt: fillPrompt({
+      report: base,
+      skill: fs.existsSync(SKILL_MD) ? SKILL_MD : '',
+      checkCmd: `node "${CLI}" check ${base}${includeSpec ? '' : ' --dissect-only'}`,
+      materials: reportMaterials(dir),
+      includeSpec,
+      topic: o.topic || '',
+    }),
+  });
+  if (!d.report) {
+    if (ag.name && (d.res === 'failed' || d.res === 'timeout')) process.exitCode = 1;
+    return { filled: null, mineDir: '', detected };
+  }
+  const filled = checkReport(d.report, { dissectOnly: o.dissectOnly });
+  row('완성', `관찰 ${filled.counts.observed} · 추정 ${filled.counts.inferred} · 모름 ${filled.counts.unknown}${filled.counts.code ? ` · 코드 흔적 ${filled.counts.code}` : ''}`);
+  for (const e of filled.errors) say(`오류  ${e}`);
+  if (filled.errors.length) {
+    rowG('검사', `오류 ${filled.errors.length}개. report.json 을 고친 뒤 rebiz check ${shown(reportFile)}${o.dissectOnly ? ' --dissect-only' : ''} 로 다시 검사하세요.`);
+    process.exitCode = 1;
+    return { filled, mineDir: '', detected };
+  }
+  rowG('검사 통과', `경고 ${filled.warnings.length}개`);
+  let mineDir = '';
+  if (includeSpec && d.report.sections?.my_version?.working_name) {
+    try {
+      const { buildSite } = await tool('make-site.mjs');
+      const builtSite = buildSite(reportFile, path.join(dir, 'my-version'), { topic: o.topic || '', force: o.force });
+      mineDir = builtSite.dir;
+      rowG('내 버전', `${shown(mineDir)}  ${T.dim(builtSite.files.join(' · '))}`);
+      for (const f of builtSite.clone?.fails || []) say(`실패  [${f.rule}] ${f.file}: ${f.msg}`);
+      if (builtSite.clone && !builtSite.clone.fails.length) {
+        rowG('겹침 검사', `통과 (원본 글 ${builtSite.clone.stats.sourceLines}줄과 견줌, 경고 ${builtSite.clone.warns.length}건)`);
+      }
+      if (builtSite.clone?.fails?.length) process.exitCode = 1;
+    } catch (e) {
+      if (!e.code) throw e;
+      rowG('내 버전', `건너뜀: ${e.message}`);
+    }
+  }
+  if (d.res !== 'done') process.exitCode = 1;
+  return { filled, mineDir, detected };
+}
+
 async function dissectUrl(o) {
+  const ag = agentArg(o);
+  if (!ag) return;
   const { collect, buildDraftFromPages, writeOutputs, outDirFor, Stop } = await tool('collect.mjs');
   const { checkReport } = await tool('check-report.mjs');
   const input = o.rest[0];
@@ -325,15 +389,28 @@ async function dissectUrl(o) {
     say(`${T.dim('다음')}       ${built.read.next}`);
   }
   say();
-  await showView(path.join(dir, 'report.json'), { out: path.join(dir, 'report.html'), lang: o.lang, open: o.open });
-  say(`${T.dim('저장')}    ${tilde(dir)}${path.sep}  report.json · report.html · source.json · requests.json${c.deep.mode === 'precise' ? ' · evidence/' : ''}`);
+  const reportFile = path.join(dir, 'report.json');
+  const { filled, mineDir, detected } = await completeDissect(o, ag, dir, checkReport);
+  say();
+  await showView(reportFile, { mine: mineDir || undefined, out: path.join(dir, 'report.html'), lang: o.lang, open: o.open });
+  say(`${T.dim('저장')}    ${tilde(dir)}${path.sep}  report.json · report.html · source.json · requests.json${c.deep.mode === 'precise' ? ' · evidence/' : ''}${mineDir ? ' · my-version/' : ''}`);
   say(T.dim('          source.json 과 evidence 폴더는 내 컴퓨터에만 두고 어디에도 올리지 않습니다.'));
   say();
-  say(T.bold('여기까지가 자동으로 확인된 것입니다. 해석은 에이전트와 함께 채웁니다'));
-  const rel = path.relative(process.cwd(), path.join(dir, 'report.json'));
-  say(`  ${T.hi(`"reversebusiness 로 ${rel && !rel.startsWith('..') ? rel : tilde(path.join(dir, 'report.json'))} 을 이어서 해부해 줘"`)}`);
-  say(`  ${T.dim('스킬이 아직 없다면:')} ${NPX}`);
-  nextLines(`rebiz fill ${shown(path.join(dir, 'report.json'))}`);
+  if (filled && !filled.errors.length) {
+    say(T.bold('해부부터 내 버전 명세까지 한 번에 마쳤습니다'));
+    nextLines(
+      `rebiz video ${shown(reportFile)}${mineDir ? ` --mine ${shown(mineDir)}` : ''}`,
+      mineDir ? '' : `rebiz build ${shown(reportFile)}`,
+      `rebiz apply ${shown(reportFile)} --to <내 프로젝트 폴더>`,
+    );
+  } else {
+    say(T.bold('여기까지가 자동으로 확인된 것입니다. 해석은 에이전트와 함께 채웁니다'));
+    const rel = path.relative(process.cwd(), reportFile);
+    say(`  ${T.hi(`"reversebusiness 로 ${rel && !rel.startsWith('..') ? rel : tilde(reportFile)} 을 끝까지 해부해 줘"`)}`);
+    if (!ag.name && !o.noFill && !detected) say(T.dim('  터미널에서 한 번에 끝까지 완성하려면 --agent claude 또는 --agent codex 를 붙이세요.'));
+    say(`  ${T.dim('스킬이 아직 없다면:')} ${NPX}`);
+    nextLines(`rebiz fill ${shown(reportFile)}`);
+  }
   promo();
 }
 
@@ -458,7 +535,7 @@ async function fill(o) {
   const listed = Array.isArray(r.sections && r.sections.unknowns) ? r.sections.unknowns.length : 0;
   const dir = path.dirname(path.resolve(file));
   const base = path.basename(file);
-  const materials = ['source.json', 'evidence'].filter((f) => fs.existsSync(path.join(dir, f))).map((f) => (f === 'evidence' ? 'evidence/' : f));
+  const materials = reportMaterials(dir);
   row('리포트', `${shown(file)}`);
   row('문장', `관찰 ${before.counts.observed} · 추정 ${before.counts.inferred} · 모름 ${before.counts.unknown}${before.counts.code ? ` · 코드 흔적 ${before.counts.code}` : ''}`);
   row('모르는 것', `따로 정리한 것 ${listed}건${before.myVersion === 'empty' ? ' · 6번 칸(내 버전 명세)은 아직 비어 있음' : ''}`);
