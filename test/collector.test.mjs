@@ -8,13 +8,15 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startSite, fakeClock } from './fixtures/server.mjs';
 import { collect, buildDraftFromPages, writeOutputs, parseRobots, rulesFor, isAllowed, neverOpen, normalizeUrl, readPage, LIMITS } from '../skill/reversebusiness/tools/collect.mjs';
+import { findBrowser } from '../skill/reversebusiness/tools/render.mjs';
 import { checkReport } from '../skill/reversebusiness/tools/check-report.mjs';
 import { parseHtml, textOf, byTag, textLines } from '../skill/reversebusiness/tools/html-lite.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(ROOT, 'bin', 'rebiz.mjs');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-test-'));
-const quick = () => { const c = fakeClock(); return { sleep: c.sleep, now: c.now, clock: c }; };
+// 가짜 시계로 빨리 돌린다. 브라우저로 그려 읽는 시험은 따로 있으므로 여기서는 꺼 둔다.
+const quick = (extra = {}) => { const c = fakeClock(); return { sleep: c.sleep, now: c.now, clock: c, render: 'off', ...extra }; };
 const runCli = (args, home) => new Promise((resolve) => {
   const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, HOME: home, USERPROFILE: home, NO_COLOR: '1' } });
   let stdout = '';
@@ -197,7 +199,8 @@ test('스크립트로 그리는 페이지는 그렇다고 적고 모름으로 �
   const { report, thin } = buildDraftFromPages(c, { today: '2026-11-17' });
   assert.equal(thin, true);
   assert.equal(report.sections.money.price[0].status, 'unknown');
-  assert.ok(report.sections.tech.items.some((t) => t.status === 'inferred' && /스크립트로 그리는/.test(t.text)));
+  assert.ok(report.sections.tech.items.some((t) => t.status === 'unknown' && /글이 0자로 적다/.test(t.text)));
+  assert.deepEqual({ mode: report.meta.read.mode, thin: report.meta.read.thin, chars: report.meta.read.chars }, { mode: 'html', thin: true, chars: 0 });
   assert.equal(report.skeleton, undefined, '구역을 못 읽었으면 뼈대를 지어내지 않는다');
 });
 
@@ -207,7 +210,7 @@ test('rebiz <주소>: 실제 시계로 끝까지 (요청 간격 실측, 화면 �
   try {
     const out = path.join(dir, 'out');
     // 서버가 같은 프로세스에 있으므로 자식 프로세스를 기다리는 동안 이벤트 루프를 막지 않는다.
-    const run = await runCli([`${site.origin}/`, '--no-open', '--out', out, '--pages', '3'], dir);
+    const run = await runCli([`${site.origin}/`, '--no-open', '--no-render', '--out', out, '--pages', '3'], dir);
     assert.equal(run.status, 0, run.stdout);
     assert.match(run.stdout, /해부 화면 {2}file:\/\//);
     assert.match(run.stdout, /페이지 3장 · 요청 4번/);
@@ -291,4 +294,127 @@ test('아주 깊게 겹친 HTML 도 멈추지 않고 읽는다', () => {
   const p = readPage(deep, 'https://deep.example/');
   assert.ok(p.lines.includes('깊은 글'));
   assert.deepEqual(p.prices, ['2,000원']);
+});
+
+// ---------- 0.3.1: 그려진 화면 읽기, 소유 관계, 약관 상태, 얇은 결과 ----------
+const BROWSER = findBrowser();
+
+test('얇은 페이지: 브라우저로 한 번 그려 읽으면 가격과 누르는 곳이 관찰된다', { skip: BROWSER ? false : '이 컴퓨터에 Chrome 계열 브라우저가 없어 건너뜀' }, async () => {
+  const site = await startSite();
+  try {
+    const c = await collect(`${site.origin}/spa`, quick({ render: 'auto', version: '9.9.9' }));
+    assert.equal(c.stop, null);
+    assert.equal(c.render.mode, 'used');
+    assert.ok(c.render.closed.exited && c.render.closed.profileRemoved, '브라우저를 끄고 임시 프로필을 지운다');
+    const main = c.pages[0];
+    assert.equal(main.rendered, true);
+    assert.equal(main.plainTextLength, 0, '받은 HTML 에는 글이 없었다');
+    assert.ok(main.textLength > 100);
+    assert.deepEqual(main.prices, ['12,900원', '3,000원']);
+    assert.deepEqual(main.signup, ['회원가입']);
+    assert.deepEqual(main.pay, ['구독 신청하기']);
+    // 구역의 길이는 브라우저에서 잰 값
+    assert.deepEqual(main.skeleton.map((b) => [b.kind, b.weight]), [['nav', 70], ['media', 620], ['price', 420], ['list', 900], ['faq', 300], ['footer', 160]]);
+    // 순서: robots, 받은 HTML, 그다음에야 브라우저
+    assert.deepEqual(site.seen.slice(0, 2).map((r) => r.path), ['/robots.txt', '/spa']);
+    const viaBrowser = site.seen.filter((r) => /HeadlessChrome/.test(r.headers['user-agent']));
+    assert.ok(viaBrowser.length >= 2);
+    assert.ok(viaBrowser.every((r) => /rebiz\/9\.9\.9 \(\+https:\/\/github\.com\/wonseokjung\/reversebusiness\)$/.test(r.headers['user-agent'])), '브라우저로 읽을 때도 이름을 밝힌다');
+    // 브라우저 안에서도 같은 선
+    assert.ok(site.seen.every((r) => r.method === 'GET'), 'GET 이 아닌 요청은 내보내지 않는다');
+    for (const never of ['/api/data', '/collect', '/login', '/signup', '/newsletter']) assert.ok(!site.seen.some((r) => r.path === never), `${never} 로 요청이 나가면 안 된다`);
+    assert.ok(site.seen.every((r) => !('cookie' in r.headers)), '받은 쿠키를 돌려보내지 않는다');
+    assert.ok(c.render.why['GET 이 아닌 요청'] >= 1 && c.render.why['robots.txt 금지'] >= 1);
+    assert.ok(c.pages.length <= 5);
+    assert.deepEqual(c.pages.map((p) => p.kind), ['main', 'pricing', 'terms', 'refund']);
+    const starts = c.log.map((r) => Date.parse(r.started_at));
+    for (let i = 1; i < starts.length; i += 1) assert.ok(starts[i] - starts[i - 1] >= 2000, '그려 읽을 때도 요청 사이 2초');
+    const { report, thin } = buildDraftFromPages(c, { today: '2026-11-17', version: '9.9.9' });
+    assert.equal(report.meta.read.mode, 'rendered');
+    assert.equal(report.meta.read.html_chars, 0);
+    assert.equal(thin, true, '시험용 페이지는 그린 뒤에도 글이 적다');
+    assert.equal(report.sections.money.price[0].status, 'observed');
+    assert.match(report.sections.money.price[0].text, /12,900원/);
+    assert.ok(report.sections.tech.items.some((t) => t.layer === '그리는 방식' && t.status === 'observed' && /0자였고/.test(t.text)));
+    assert.ok(report.sections.tech.items.some((t) => t.layer === '브라우저 안에서 거른 요청' && t.status === 'observed'));
+    assert.match(report.skeleton.note, /잰 뼈대/);
+    assert.match(report.meta.scope, /헤드리스 브라우저/);
+    assert.ok(!/아침마다|반찬 세 가지|멸치/.test(JSON.stringify(report.skeleton)), '뼈대에는 원본 문구가 없다');
+  } finally { await site.close(); }
+});
+
+test('그려 읽기: robots 가 막으면 브라우저를 띄우지 않고, 로그인으로 넘기는 스크립트는 따라가지 않는다', { skip: BROWSER ? false : '브라우저 없음' }, async () => {
+  const blocked = await startSite({ robots: 'User-agent: *\nDisallow: /spa\n' });
+  try {
+    const c = await collect(`${blocked.origin}/spa`, quick({ render: 'force' }));
+    assert.equal(c.stop.code, 'robots-disallow');
+    assert.deepEqual(blocked.seen.map((r) => r.path), ['/robots.txt']);
+    assert.equal(c.render.pages, 0);
+  } finally { await blocked.close(); }
+  const jump = await startSite({ routes: { '/jump': (req, res, html) => html('<!doctype html><html><head><title>넘기기</title></head><body><p>잠시만요</p><script>location.href = "/login?next=/jump";</script></body></html>') } });
+  try {
+    const c = await collect(`${jump.origin}/jump`, quick({ render: 'auto' }));
+    assert.ok(!jump.seen.some((r) => r.path === '/login'), '로그인 주소는 브라우저 안에서도 열지 않는다');
+    assert.ok(c.render.why['로그인이나 결제 주소'] >= 1);
+  } finally { await jump.close(); }
+});
+
+test('브라우저가 없거나 --no-render 면 얇은 결과와 다음에 할 일을 알려 준다', async () => {
+  const site = await startSite();
+  try {
+    const none = await collect(`${site.origin}/spa`, quick({ render: 'auto', browser: null }));
+    assert.equal(none.render.mode, 'unavailable');
+    const a = buildDraftFromPages(none, { today: '2026-11-17' });
+    assert.equal(a.thin, true);
+    assert.match(a.read.note, /읽은 글이 0자뿐이라 모름이 많다.*브라우저.*찾지 못해/);
+    assert.match(a.read.next, /Chrome 계열 브라우저가 있는 컴퓨터에서 다시 실행하거나, REA/);
+    assert.equal(a.report.sections.money.price[0].status, 'unknown');
+    const off = await collect(`${site.origin}/spa`, quick());
+    assert.equal(off.render.mode, 'off');
+    assert.match(buildDraftFromPages(off, { today: '2026-11-17' }).read.next, /--no-render 를 빼고/);
+    assert.ok(site.seen.every((r) => !/HeadlessChrome/.test(r.headers['user-agent'])));
+  } finally { await site.close(); }
+});
+
+test('약관 상태와 소유 관계: robots 만 확인했으면 checked 가 아니다, --own 이면 내 것', async () => {
+  const site = await startSite();
+  try {
+    const c = await collect(`${site.origin}/`, quick());
+    const third = buildDraftFromPages(c, { today: '2026-11-17' }).report;
+    assert.equal(third.meta.terms.status, 'robots-only');
+    assert.match(third.meta.terms.note, /조항은 아직 읽지 않았다/);
+    assert.ok(checkReport(third).warnings.some((w) => /robots\.txt 까지만 확인/.test(w)));
+    const own = buildDraftFromPages(c, { today: '2026-11-17', relation: 'own' }).report;
+    assert.equal(own.meta.target.relation, 'own');
+    assert.equal(own.meta.terms.status, 'not-applicable');
+    assert.ok(checkReport(own).errors.every((e) => /one_line|my_version/.test(e)));
+  } finally { await site.close(); }
+  const bare = await startSite({ robotsStatus: 404, routes: { '/': (req, res, html) => html('<html><head><title>가게</title></head><body><h1>시험용 가게</h1><p>한 끼 5,000원</p></body></html>') } });
+  try {
+    const c = await collect(`${bare.origin}/`, quick());
+    assert.equal(buildDraftFromPages(c, { today: '2026-11-17' }).report.meta.terms.status, 'not-found');
+  } finally { await bare.close(); }
+});
+
+test('rebiz <주소> --own: 그려 읽고 내 것으로 적는다 (실제 시계)', { skip: BROWSER ? false : '브라우저 없음' }, async () => {
+  const site = await startSite();
+  const dir = tmp();
+  try {
+    const out = path.join(dir, 'out');
+    const run = await runCli([`${site.origin}/spa`, '--no-open', '--own', '--pages', '1', '--out', out], dir);
+    assert.equal(run.status, 0, run.stdout);
+    assert.match(run.stdout, /그려서 읽기:/);
+    assert.match(run.stdout, /그려 읽기 .* 임시 프로필로 1장\. 브라우저를 끄고 프로필을 지웠습니다/);
+    assert.match(run.stdout, /내 것으로 적습니다 \(--own\)/);
+    const r = JSON.parse(fs.readFileSync(path.join(out, 'report.json'), 'utf8'));
+    assert.equal(r.meta.target.relation, 'own');
+    assert.equal(r.meta.read.mode, 'rendered');
+    assert.match(JSON.stringify(r.sections.money.price), /12,900원/);
+    const q = JSON.parse(fs.readFileSync(path.join(out, 'requests.json'), 'utf8'));
+    assert.equal(q.render.mode, 'used');
+    assert.ok(!fs.readdirSync(out).some((f) => /\.(png|jpe?g|webp)$/i.test(f)), '화면 캡처를 저장하지 않는다');
+    const off = await runCli([`${site.origin}/spa`, '--no-open', '--no-render', '--pages', '1', '--out', path.join(dir, 'off')], dir);
+    assert.match(off.stdout, /얇은 결과 {2}읽은 글이 0자뿐이라 모름이 많다/);
+    assert.match(off.stdout, /다음 {7}--no-render 를 빼고 다시 실행/);
+  } finally { await site.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

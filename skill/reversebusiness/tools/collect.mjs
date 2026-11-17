@@ -2,14 +2,16 @@
 // 가벼운 수집기: 공개 페이지 몇 장을 한 번씩 받아 report.json 초안을 만든다. 의존성 없음, Node 18 이상.
 //
 // 사용:
-//   node collect.mjs <주소> [--out <폴더>] [--pages 5] [--relation third-party|own]
+//   node collect.mjs <주소> [--out <폴더>] [--pages 5] [--own] [--no-render]
 //
 // 지키는 것:
 //   - robots.txt 를 가장 먼저 받는다. 금지된 주소는 받지 않고 멈춘다.
 //   - 첫 페이지 한 장 + 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장.
 //   - 요청과 요청 사이 2초 이상 (robots.txt 의 Crawl-delay 가 더 길면 그 값).
 //   - GET 만 한다. 로그인, 가입, 결제, 폼 제출을 하지 않는다. 로그인이나 결제로 가는 링크는 열지 않는다.
-//   - 쿠키와 토큰을 저장하지도 보내지도 않는다. 스크립트를 실행하지 않는다.
+//   - 쿠키와 토큰을 저장하지도 보내지도 않는다.
+//   - 받은 HTML 에 글이 얇으면(스크립트로 그리는 페이지), 이 컴퓨터의 Chrome 계열 브라우저를 임시 프로필로 잠깐 띄워
+//     그려진 화면을 한 번 읽는다 (render.mjs). 같은 한도 안에서만, 누르기와 입력 없이. --no-render 로 끈다.
 //   - 누가 읽는지 숨기지 않는다 (User-Agent 에 이름과 저장소 주소).
 //   - 401, 403, 429 나 봇 확인 화면을 만나면 넘지 않고 멈춘다.
 // 채울 수 있는 것만 관찰로 적고, 나머지는 모름으로 둔다. 해석(고객, 문제, 내 버전)은 하지 않는다.
@@ -18,10 +20,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseHtml, walk, find, byTag, textOf, rawText, textLines, isEl } from './html-lite.mjs';
 import { scrub, cleanUrl, PRICE } from './from-rea.mjs';
+import { findBrowser, openRenderer, isTracker } from './render.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_URL = 'https://github.com/wonseokjung/reversebusiness';
-export const LIMITS = { maxPages: 5, delayMs: 2000, maxDelayMs: 60000, timeoutMs: 15000, maxBytes: 2_000_000, maxRequests: 12, maxRedirects: 3 };
+export const LIMITS = { maxPages: 5, delayMs: 2000, maxDelayMs: 60000, timeoutMs: 15000, maxBytes: 2_000_000, maxRequests: 14, maxRedirects: 3, renderBudgetMs: 75000 };
+// 받은 HTML 의 글이 이보다 적으면 얇다고 본다.
+export const THIN_CHARS = 1500;
 export const userAgent = (version = '0') => `rebiz/${version} (+${REPO_URL}; reads a few public pages, 2s apart, no login)`;
 
 export class Stop extends Error {
@@ -151,7 +156,18 @@ export function createFetcher({ version = '0', fetchImpl = globalThis.fetch, sle
       lastEnd = now();
     }
   }
-  return { get, log, ua, limits: L, setDelay: (ms) => { delayMs = Math.min(Math.max(ms, L.delayMs), L.maxDelayMs); }, delay: () => delayMs };
+  // 브라우저로 그려 읽는 한 번도 요청 한 번으로 치고, 같은 간격을 지킨다.
+  async function paced(kind, url, run) {
+    if (log.length >= L.maxRequests) throw new Stop('request-limit', `요청 한도(${L.maxRequests}번)에 닿아 멈췄어요.`);
+    if (lastEnd != null) {
+      const wait = lastEnd + delayMs - now();
+      if (wait > 0) await sleep(wait);
+    }
+    const entry = { n: log.length + 1, kind, method: 'GET', url: cleanUrl(url), started_at: new Date(now()).toISOString(), status: 0, bytes: 0 };
+    log.push(entry);
+    try { return await run(entry); } finally { lastEnd = now(); }
+  }
+  return { get, paced, log, ua, limits: L, setDelay: (ms) => { delayMs = Math.min(Math.max(ms, L.delayMs), L.maxDelayMs); }, delay: () => delayMs };
 }
 
 export function normalizeUrl(input) {
@@ -200,7 +216,7 @@ const TECH_HINTS = [
   [/supabase/i, 'Supabase'],
 ];
 
-export function readPage(html, pageUrl) {
+export function readPage(html, pageUrl, { rects = null } = {}) {
   const root = parseHtml(html);
   const head = byTag(root, 'head')[0] || root;
   const body = byTag(root, 'body')[0] || root;
@@ -254,10 +270,11 @@ export function readPage(html, pageUrl) {
   ].filter((u) => u && !u.startsWith('data:')).map((u) => { try { return cleanUrl(new URL(u, base).href); } catch { return ''; } }).filter((u) => /\.(png|jpe?g|webp|gif|svg|ico|avif|mp4|webm|mov|woff2?|ttf|otf)$/i.test(u)));
   return {
     url: cleanUrl(pageUrl), title, lang: htmlEl ? htmlEl.attrs.lang || '' : '', metas, lines, textLength: visible.length, headings, links, buttons,
-    signup: hit(SIGNUP), pay: hit(PAY).filter((t) => !NOT_PAY.test(t)), login: hit(LOGIN), back: hit(RETURN_HINT), prices, ld,
-    counts: { img: byTag(body, 'img').length, video: byTag(body, 'video').length, iframe: byTag(body, 'iframe').length, form: forms.length, password: find(body, (c) => c.tag === 'input' && (c.attrs.type || '').toLowerCase() === 'password').length, script: scripts.length, links: links.length, buttons: buttons.length },
+    signup: hit(SIGNUP), pay: hit(PAY).filter((t) => !NOT_PAY.test(t)), login: hit(LOGIN), back: hit(RETURN_HINT).filter((t) => t.length <= 20), prices, ld,
+    counts: { img: byTag(body, 'img').length, video: byTag(body, 'video').length, iframe: byTag(body, 'iframe').length, form: forms.length, password: find(body, (c) => c.tag === 'input' && (c.attrs.type || '').toLowerCase() === 'password').length, script: scripts.length, scriptTags: byTag(root, 'script').filter((x) => !/json/i.test(x.attrs.type || '')).length, links: links.length, buttons: buttons.length },
     scriptHosts, tech, generator: metas.generator || '', assets, challenge: CHALLENGE.test(`${title} ${visible.slice(0, 600)}`) && visible.length < 1500,
-    skeleton: buildSkeleton(body),
+    skeleton: rects && rects.length >= 2 ? skeletonFromRects(root, rects) : buildSkeleton(body),
+    measured: !!(rects && rects.length >= 2),
   };
 }
 
@@ -304,7 +321,10 @@ export function buildSkeleton(body) {
     if (big.w / total < 0.42 || kids.length < 2 || boxes < 2 || big.x.tag === 'footer' || big.x.tag === 'nav') break;
     list = [...list.slice(0, big.i), ...kids, ...list.slice(big.i + 1)];
   }
-  const blocks = list.slice(0, 16).map((node) => ({ kind: kindOf(node), weight: Math.round(Math.min(Math.max(weightOf(node), 120), 2600)), back: RETURN_HINT.test(textOf(node)) || LOGIN.test(textOf(node)) }));
+  return labelBlocks(list.slice(0, 16).map((node) => ({ kind: kindOf(node), weight: Math.round(Math.min(Math.max(weightOf(node), 120), 2600)), back: RETURN_HINT.test(textOf(node)) || LOGIN.test(textOf(node)) })));
+}
+// 구역마다 내 말로 이름을 붙이고, 하는 일로 층을 추정한다.
+function labelBlocks(blocks) {
   const firstPay = blocks.findIndex((b) => b.kind === 'price' || b.kind === 'cta');
   const seen = {};
   return blocks.map((b, i) => {
@@ -317,13 +337,26 @@ export function buildSkeleton(body) {
     return { name: `${KIND_NAME[b.kind]}${seen[b.kind] > 1 ? ` ${seen[b.kind]}` : ''}`, role, weight: b.weight, kind: b.kind, status: 'inferred' };
   });
 }
+// 브라우저가 그린 화면에서 잰 구역(위치와 높이)으로 뼈대를 만든다. 길이는 실제로 잰 값이다.
+export function skeletonFromRects(root, rects) {
+  const nodes = new Map();
+  for (const n of find(root, (c) => 'data-rebiz-b' in c.attrs)) nodes.set(String(n.attrs['data-rebiz-b']), n);
+  const blocks = [];
+  for (const r of [...rects].sort((a, b) => a.top - b.top)) {
+    const node = nodes.get(String(r.i));
+    if (!node || !(r.height > 0)) continue;
+    const text = textOf(node);
+    blocks.push({ kind: kindOf(node), weight: Math.round(r.height), back: RETURN_HINT.test(text) || LOGIN.test(text) });
+  }
+  return labelBlocks(blocks);
+}
 
 // ---------- 모으기 ----------
-export async function collect(input, { version = '0', maxPages = LIMITS.maxPages, fetchImpl, sleep, now, limits, onStep = () => {} } = {}) {
+export async function collect(input, { version = '0', maxPages = LIMITS.maxPages, fetchImpl, sleep, now, limits, onStep = () => {}, render = 'auto', browser } = {}) {
   const start = normalizeUrl(input);
   const f = createFetcher({ version, fetchImpl, sleep, now, limits });
   const pagesMax = Math.min(Math.max(1, maxPages), LIMITS.maxPages);
-  const result = { start: cleanUrl(start.href), origin: start.origin, robots: null, pages: [], skipped: [], stop: null, log: f.log, ua: f.ua, delayMs: f.delay(), pagesMax };
+  const result = { start: cleanUrl(start.href), origin: start.origin, robots: null, pages: [], skipped: [], stop: null, log: f.log, ua: f.ua, delayMs: f.delay(), pagesMax, render: { mode: render === 'off' ? 'off' : 'not-needed', browser: '', pages: 0, allowed: 0, blocked: 0, why: {} } };
   const robotsCache = new Map();
 
   async function robotsOf(origin) {
@@ -386,9 +419,76 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
     throw new Stop('too-many-redirects', '주소가 너무 여러 번 넘어가서 멈췄어요.');
   }
 
+  // 받은 HTML 이 얇은지: 스크립트가 있고 글이 적거나, 가격과 누르는 곳이 하나도 안 보일 때.
+  const needsRender = (p) => p.counts.scriptTags > 0 && (p.textLength < THIN_CHARS || (!p.prices.length && !p.pay.length && !p.signup.length && p.textLength < THIN_CHARS * 2));
+  let renderer = null;
+  const renderStarted = (now || Date.now)();
+  // 브라우저 안에서 나가는 요청마다 같은 선을 적용한다.
+  async function allowInBrowser(reqUrl, { isMain }) {
+    let u;
+    try { u = new URL(reqUrl); } catch { return { ok: false, why: '읽을 수 없는 주소' }; }
+    if (isMain) {
+      if (!sameSite(u, start)) return { ok: false, why: '다른 사이트로 넘어가기' };
+      if (neverOpen(u.pathname)) return { ok: false, why: '로그인이나 결제 주소' };
+    }
+    if (sameSite(u, start)) {
+      const rb = robotsCache.get(u.origin) || robotsCache.get(start.origin);
+      if (rb && !isAllowed(rb.rules, u.pathname + u.search)) return { ok: false, why: 'robots.txt 금지' };
+      if (!isMain && neverOpen(u.pathname)) return { ok: false, why: '로그인이나 결제 주소' };
+      return { ok: true };
+    }
+    if (isTracker(u.hostname)) return { ok: false, why: '분석과 광고 도구' };
+    return { ok: true };
+  }
+  // 한 장을 브라우저로 그려 읽는다. 미리 주소와 robots.txt 를 확인하고, 요청 한 번으로 쳐서 간격을 지킨다.
+  async function rendered(u, kind) {
+    if (neverOpen(u.pathname)) throw new Stop('login-wall', `로그인, 가입, 결제, 계정 화면으로 보이는 주소는 열지 않아요: ${short(u.pathname, 40)}`, { path: u.pathname });
+    const rb = await robotsOf(u.origin);
+    if (!isAllowed(rb.rules, u.pathname + u.search)) throw new Stop('robots-disallow', `robots.txt 가 이 주소를 막고 있어요: ${u.pathname}. 받지 않고 멈춥니다.`, { path: u.pathname });
+    onStep(`그려서 읽기: ${cleanUrl(u.href)}`);
+    return f.paced('render', u.href, async (entry) => {
+      let r;
+      try { r = await renderer.render(u.href, { allow: allowInBrowser }); } catch { throw new Stop('render-failed', '브라우저로 그려 읽지 못했어요.'); }
+      entry.status = r.status; entry.bytes = Buffer.byteLength(r.html || ''); entry.browser_requests = r.stats.allowed; entry.browser_blocked = r.stats.blocked;
+      result.render.allowed += r.stats.allowed; result.render.blocked += r.stats.blocked;
+      for (const [k, v] of Object.entries(r.stats.why)) result.render.why[k] = (result.render.why[k] || 0) + v;
+      if (BLOCK_STATUS.has(r.status)) throw new Stop('blocked', `이 주소는 ${r.status} 로 막혀 있어요. 넘지 않고 멈춥니다.`, { status: r.status });
+      if (r.stats.mainBlocked && !r.html) throw new Stop(r.stats.mainBlocked.includes('로그인') ? 'login-wall' : 'offsite-redirect', `페이지가 다른 곳으로 넘기려 해서 따라가지 않았어요 (${r.stats.mainBlocked}).`);
+      let final;
+      try { final = new URL(r.url); } catch { final = u; }
+      if (!/^https?:$/.test(final.protocol) || !sameSite(final, start)) final = u;
+      let p;
+      try { p = readPage(r.html, final.href, { rects: r.blocks }); } catch { throw new Stop('parse-error', '그려진 화면을 읽지 못했어요.'); }
+      if (p.challenge) throw new Stop('challenge', '사람인지 확인하는 화면이 나왔어요. 풀지 않고 멈춥니다.');
+      result.render.pages += 1;
+      return { ...p, kind, status: r.status || 200, headers: {}, truncated: false, rendered: true, browserStats: r.stats, renderTimedOut: r.timedOut };
+    });
+  }
+
   try {
-    const main = await page(start, 'main');
+    let main = await page(start, 'main');
     result.pages.push(main);
+    if (render !== 'off' && (render === 'force' || needsRender(main))) {
+      const found = browser === undefined ? findBrowser() : browser;
+      if (!found) result.render.mode = 'unavailable';
+      else {
+        try {
+          onStep(`받은 HTML 의 글이 ${main.textLength}자로 얇아요. ${found.name} 을(를) 임시 프로필로 잠깐 띄워 그려진 화면을 읽습니다.`);
+          renderer = await openRenderer({ browser: found, version, repo: REPO_URL });
+          result.render.browser = found.name;
+          const drawn = await rendered(new URL(main.url), 'main');
+          drawn.plainTextLength = main.textLength;
+          drawn.headers = main.headers;
+          // 그려 읽은 쪽에 글이 더 많을 때만 그것으로 바꾼다.
+          if (drawn.textLength > main.textLength) { main = drawn; result.pages[0] = drawn; result.render.mode = 'used'; } else result.render.mode = 'no-gain';
+        } catch (e) {
+          if (e instanceof Stop && HARD_STOP.has(e.code)) throw e;
+          result.render.mode = 'failed';
+          result.render.error = e instanceof Stop ? e.message : '브라우저를 띄우지 못했어요.';
+        }
+      }
+    }
+    const useBrowser = result.render.mode === 'used';
     // 가격, 약관, 환불 링크만 고른다. 같은 사이트, 로그인/결제가 아닌 것, 한 종류에 하나.
     const picked = [];
     const mainPath = new URL(main.url).pathname;
@@ -398,7 +498,11 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
     }
     for (const l of picked) {
       if (result.pages.length >= pagesMax) { result.skipped.push({ url: cleanUrl(l.href), why: `한도 ${pagesMax}장` }); continue; }
-      try { result.pages.push(await page(new URL(l.href), l.kind)); } catch (e) {
+      if (useBrowser && (now || Date.now)() - renderStarted > f.limits.renderBudgetMs) { result.skipped.push({ url: cleanUrl(l.href), why: '그려 읽는 시간 한도' }); continue; }
+      try {
+        // 첫 페이지를 그려서 읽었다면 같은 사이트의 다음 장도 그려서 읽는다 (한 장에 한 번만 연다).
+        result.pages.push(useBrowser ? await rendered(new URL(l.href), l.kind) : await page(new URL(l.href), l.kind));
+      } catch (e) {
         if (!(e instanceof Stop)) throw e;
         result.skipped.push({ url: cleanUrl(l.href), why: e.message });
         // 막힘, 사람 확인, 연결 문제를 만나면 남은 링크도 받지 않고 거기서 끝낸다.
@@ -408,6 +512,8 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
   } catch (e) {
     if (!(e instanceof Stop)) throw e;
     result.stop = { code: e.code, message: e.message };
+  } finally {
+    if (renderer) { try { result.render.closed = await renderer.close(); } catch { /* 닫는 중 오류는 넘어간다 */ } }
   }
   result.delayMs = f.delay();
   return result;
@@ -422,7 +528,9 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   const evidence = [];
   const add = (type, ref, note) => { const id = `E${evidence.length + 1}`; evidence.push({ id, type, ref, note, seen_at: today }); return id; };
   const ev = new Map();
-  for (const p of c.pages) ev.set(p, add('url', p.url, `${PAGE_LABEL[p.kind] || '페이지'}. 공개 HTML 을 한 번 받아 글자와 구조만 읽음 (응답 ${p.status}, 글자 ${p.textLength}자${p.truncated ? ', 크기 한도에서 잘림' : ''}). 스크립트는 실행하지 않음`));
+  for (const p of c.pages) ev.set(p, add('url', p.url, p.rendered
+    ? `${PAGE_LABEL[p.kind] || '페이지'}. 헤드리스 브라우저(임시 프로필)로 한 번 열어 그려진 화면의 글자와 구조, 구역의 위치를 읽음 (응답 ${p.status}, 글자 ${p.textLength}자). 누르기와 입력 없음, 화면 캡처 없음`
+    : `${PAGE_LABEL[p.kind] || '페이지'}. 공개 HTML 을 한 번 받아 글자와 구조만 읽음 (응답 ${p.status}, 글자 ${p.textLength}자${p.truncated ? ', 크기 한도에서 잘림' : ''}). 스크립트는 실행하지 않음`));
   const E = ev.get(main);
   const R = c.robots ? add('url', c.robots.url, c.robots.found ? `robots.txt. 따른 규칙: Allow ${c.robots.allow.join(' ') || '없음'}, Disallow ${c.robots.disallow.slice(0, 8).join(' ') || '없음'}${c.robots.delay != null ? `, Crawl-delay ${c.robots.delay}` : ''}` : `robots.txt 자리에 규칙이 없음 (응답 ${c.robots.status})`) : null;
   const obs = (text, ...e) => ({ text, status: 'observed', evidence: e.filter(Boolean) });
@@ -430,9 +538,18 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   const unk = (text) => ({ text, status: 'unknown', evidence: [] });
   const seenOn = `${today} 에 읽은 값`;
   const all = c.pages;
-  // 글이 거의 없으면 스크립트로 그리는 페이지로 본다. 글이 적기만 해도 화면에 더 있을 수 있다고 적는다.
-  const thin = main.textLength < 200 && main.counts.script > 0;
-  const sparse = !thin && main.textLength < 1500 && main.counts.script > 0;
+  // 읽은 글이 얇은지, 브라우저로 그려 읽었는지.
+  const rs = c.render || { mode: 'off', browser: '', pages: 0, allowed: 0, blocked: 0, why: {} };
+  const drawn = !!main.rendered;
+  const chars = main.textLength;
+  const htmlChars = main.plainTextLength ?? main.textLength;
+  const thin = chars < THIN_CHARS;
+  const whyNotDrawn = { unavailable: '이 컴퓨터에서 Chrome 계열 브라우저(Chrome, Chromium, Edge, Brave)를 찾지 못해 그려진 화면은 읽지 못했다', off: '그려 읽기를 꺼 두어(--no-render) 그려진 화면은 읽지 않았다', failed: '브라우저로 그려 읽으려 했으나 실패했다', 'no-gain': '브라우저로 그려 봐도 글이 늘지 않았다', 'not-needed': '받은 HTML 만 읽었다' }[rs.mode] || '받은 HTML 만 읽었다';
+  const nextStep = drawn
+    ? '로그인 뒤에 내용이 있거나 그림 위주의 페이지일 수 있다. 직접 본 화면을 메모해 에이전트와 함께 채운다.'
+    : rs.mode === 'unavailable' ? 'Chrome 계열 브라우저가 있는 컴퓨터에서 다시 실행하거나, REA 가 있으면 에이전트의 정밀 모드로 읽는다. 둘 다 없으면 직접 본 화면을 메모해 에이전트와 함께 채운다.'
+      : rs.mode === 'off' ? '--no-render 를 빼고 다시 실행하면 그려진 화면까지 읽는다.'
+        : '에이전트에게 이 초안을 넘겨 화면을 직접 보고 채우게 한다.';
 
   // 1. 돈
   const price = [];
@@ -485,9 +602,10 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
   const hd = Object.entries(main.headers || {}).filter(([k]) => ['server', 'x-powered-by', 'via'].includes(k));
   if (hd.length) tech.push({ layer: '응답 머리말', ...obs(`응답 머리말에 ${hd.map(([k, v]) => `${k}: ${short(v, 30)}`).join(', ')} 이 있다.`, E) });
   const ldTypes = uniq(all.flatMap((p) => p.ld.map((j) => j.type)));
-  tech.push({ layer: '검색용 HTML', ...obs(`스크립트를 실행하지 않고 받은 HTML 에 글자가 ${main.textLength}자 있다${ldTypes.length ? `. JSON-LD ${ldTypes.length}종 (${ldTypes.slice(0, 4).map((x) => short(x, 24)).join(', ')})` : ''}${main.lang ? `. lang=${short(main.lang, 8)}` : ''}.`, E) });
-  if (thin) tech.push({ layer: '그리는 방식', ...inf('받은 HTML 에 글이 거의 없고 스크립트가 있다. 화면을 브라우저에서 스크립트로 그리는 페이지로 추정한다. 이 수집기는 스크립트를 실행하지 않아 그 내용을 보지 못했다.', E) });
-  if (sparse) tech.push({ layer: '그리는 방식', ...unk(`받은 HTML 의 글이 ${main.textLength}자로 적다. 브라우저에서 스크립트가 화면을 더 그리는지, 그 안에 무엇이 있는지는 이 수집기로는 모른다.`) });
+  tech.push({ layer: '검색용 HTML', ...obs(`스크립트를 실행하지 않고 받은 HTML 에 글자가 ${main.plainTextLength ?? main.textLength}자 있다${ldTypes.length ? `. JSON-LD ${ldTypes.length}종 (${ldTypes.slice(0, 4).map((x) => short(x, 24)).join(', ')})` : ''}${main.lang ? `. lang=${short(main.lang, 8)}` : ''}.`, E) });
+  if (drawn) tech.push({ layer: '그리는 방식', ...obs(`스크립트를 실행하지 않고 받은 HTML 의 글은 ${htmlChars}자였고, 브라우저가 그린 뒤에는 ${chars}자다. 화면을 브라우저에서 스크립트로 그리는 페이지다.`, E) });
+  else if (thin && main.counts.scriptTags > 0) tech.push({ layer: '그리는 방식', ...unk(`받은 HTML 의 글이 ${chars}자로 적다. ${whyNotDrawn}. 스크립트가 화면에 무엇을 더 그리는지는 모른다.`) });
+  if (drawn && rs.blocked) tech.push({ layer: '브라우저 안에서 거른 요청', ...obs(`그려 읽는 동안 페이지가 보내려던 요청 가운데 ${rs.blocked}개는 보내지 않았다 (${Object.entries(rs.why).map(([k, v]) => `${k} ${v}`).join(', ')}). 그 응답으로 그려지는 부분은 화면에 없을 수 있다.`, E) });
   tech.push({ layer: '서버', ...unk('서버, 데이터 저장소, 결제 연동은 밖에서 보이지 않는다.') });
 
   // 5. 모르는 것
@@ -497,7 +615,8 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
     { question: '가입과 결제 뒤의 화면', why: '로그인, 가입, 결제는 열지 않는다.', next: '공개 도움말이나 대상이 공개한 영상이 있으면 그것만 본다.' },
     { question: '이용약관이 자동 열람과 복제를 어떻게 다루는가', why: all.some((p) => p.kind === 'terms') ? '약관 페이지를 받아 두었지만 조항을 해석하지 않았다.' : '약관 링크를 찾지 못했다.', next: '약관을 사람이 직접 읽고 meta.terms 에 한 줄로 적는다.' },
   ];
-  if (thin || sparse) unknowns.push({ question: '스크립트로 그려지는 화면의 내용', why: '이 수집기는 스크립트를 실행하지 않는다.', next: '브라우저로 직접 보거나, REA 가 깔려 있으면 에이전트의 정밀 모드로 읽는다.' });
+  if (thin && !drawn) unknowns.push({ question: '스크립트로 그려지는 화면의 내용', why: `${whyNotDrawn}.`, next: nextStep });
+  if (thin && drawn) unknowns.push({ question: '그려진 화면에도 글이 적은 까닭', why: `브라우저로 그린 뒤에도 글이 ${chars}자뿐이다.`, next: nextStep });
   for (const s of c.skipped) unknowns.push({ question: `받지 않은 페이지: ${short(s.url, 60)}`, why: short(s.why, 120), next: '필요하면 사람이 직접 연다.' });
 
   const termsPage = all.find((p) => p.kind === 'terms');
@@ -507,11 +626,13 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
       target: { name: short(main.title, 80) || host, kind: 'web-service', url: main.url, relation },
       analyzed_at: today,
       analyst: `rebiz ${version} 가벼운 수집기 (자동 초안, 해석 없음)`,
-      scope: `공개 페이지 ${all.length}장을 한 번씩 받았다 (요청 ${c.log.length}번, 요청 사이 ${Math.round(c.delayMs / 100) / 10}초 이상). 스크립트를 실행하지 않았고, 로그인, 가입, 결제, 폼 제출을 하지 않았으며, 쿠키를 저장하지 않았다.`,
-      method: uniq(['robots.txt 를 먼저 확인', '공개 HTML 을 GET 으로 한 번씩 받기 (스크립트 실행 없음)', `읽은 것: ${all.map((p) => PAGE_LABEL[p.kind] || '페이지').join(', ')}`, 'collect.mjs 로 초안 만들기']),
+      read: { mode: drawn ? 'rendered' : 'html', chars, html_chars: htmlChars, thin, ...(thin ? { note: `읽은 글이 ${chars}자뿐이라 모름이 많다. ${drawn ? '브라우저로 그려 읽은 결과다' : whyNotDrawn}.`, next: nextStep } : {}) },
+      scope: `공개 페이지 ${all.length}장을 읽었다 (요청 ${c.log.length}번, 요청 사이 ${Math.round(c.delayMs / 100) / 10}초 이상). ${rs.pages ? `받은 HTML 의 글이 얇아 ${rs.pages}장은 헤드리스 브라우저(${rs.browser}, 임시 프로필)로 한 번씩 열어 그려진 화면을 읽었다. 누르기, 입력, 화면 캡처는 하지 않았고, 브라우저 안에서 GET 이 아닌 요청, robots.txt 가 막은 주소, 분석 도구는 보내지 않았다. ` : '스크립트를 실행하지 않았다. '}로그인, 가입, 결제, 폼 제출을 하지 않았고, 쿠키를 저장하지 않았다.`,
+      method: uniq(['robots.txt 를 먼저 확인', '공개 HTML 을 GET 으로 받기 (스크립트 실행 없음)', rs.pages ? `그려진 화면 읽기: 헤드리스 ${rs.browser}, 임시 프로필, 끝나면 브라우저를 끄고 프로필 삭제` : '', `읽은 것: ${all.map((p) => PAGE_LABEL[p.kind] || '페이지').join(', ')}`, 'collect.mjs 로 초안 만들기'].filter(Boolean)),
       terms: {
-        status: c.robots ? 'checked' : 'not-found',
-        note: `${c.robots && c.robots.found ? `robots.txt 를 받았고 읽은 주소는 모두 허용 범위였다 (Disallow ${c.robots.disallow.length}줄).` : 'robots.txt 에 규칙이 없었다.'} ${termsPage ? '이용약관 페이지를 받아 두었으나 조항은 해석하지 않았다. 사람이 읽고 덧붙인다.' : '이용약관 링크는 첫 페이지에서 찾지 못했다. 사람이 찾아 읽고 덧붙인다.'}`,
+        // checked 는 약관 조항까지 사람이 읽었을 때만 쓴다. 자동 초안은 거기까지 가지 않는다.
+        status: relation === 'own' ? 'not-applicable' : (termsPage || (c.robots && c.robots.found)) ? 'robots-only' : 'not-found',
+        note: `${relation === 'own' ? '내 것이라 약관 확인은 해당 없다. ' : ''}${c.robots && c.robots.found ? `robots.txt 를 받았고 읽은 주소는 모두 허용 범위였다 (Disallow ${c.robots.disallow.length}줄).` : 'robots.txt 에 규칙이 없었다.'}${relation === 'own' ? '' : termsPage ? ' 이용약관 페이지를 받아 두었으나 조항은 아직 읽지 않았다. 사람이 읽은 뒤 checked 로 바꾼다.' : ' 이용약관 링크는 찾지 못했다. 사람이 찾아 읽은 뒤 checked 로 바꾼다.'}`,
         evidence: [R, termsPage ? ev.get(termsPage) : null].filter(Boolean),
       },
       one_line: '',
@@ -532,7 +653,7 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
       my_version: { working_name: '', same_problem: '', who: '', mvp: [], differences: [{ title: '', text: '' }, { title: '', text: '' }, { title: '', text: '' }], not_taken: [] },
     },
   };
-  if (main.skeleton.length >= 2) report.skeleton = { note: '받은 HTML 의 구역 순서를 위에서 아래로 옮긴 뼈대. 길이는 글과 그림의 양으로 어림했고, 층 이름은 규칙으로 붙인 추정이다. 원본의 글과 그림은 들어 있지 않다.', evidence: [E], blocks: main.skeleton };
+  if (main.skeleton.length >= 2) report.skeleton = { note: main.measured ? '브라우저가 그린 화면에서 구역의 위치와 길이를 잰 뼈대. 순서와 길이는 잰 값이고, 층 이름은 규칙으로 붙인 추정이다. 화면 캡처는 저장하지 않았고, 원본의 글과 그림은 들어 있지 않다.' : '받은 HTML 의 구역 순서를 위에서 아래로 옮긴 뼈대. 길이는 글과 그림의 양으로 어림했고, 층 이름은 규칙으로 붙인 추정이다. 원본의 글과 그림은 들어 있지 않다.', evidence: [E], blocks: main.skeleton };
 
   // 겹침 검사용 원본 글 묶음. 리포트에는 들어가지 않는다.
   const bare = host.replace(/^www\./, '');
@@ -545,7 +666,7 @@ export function buildDraftFromPages(c, { relation = 'third-party', today = new D
     texts: uniq([...all.flatMap((p) => p.lines), ...all.flatMap((p) => ['description', 'og:title', 'og:description', 'og:site_name', 'twitter:title', 'twitter:description'].map((k) => p.metas[k] || ''))].map(scrub).filter((t) => t.length >= 2)),
     assets: uniq(all.flatMap((p) => p.assets)),
   };
-  return { report, source, thin: thin || sparse };
+  return { report, source, thin, read: report.meta.read };
 }
 
 // 설치된 스킬 폴더의 표식 파일이나 저장소의 package.json 에서 판 번호를 읽는다.
@@ -557,13 +678,16 @@ export function toolVersion() {
 }
 
 function parseArgs(argv) {
-  const o = { out: '', pages: LIMITS.maxPages, relation: 'third-party' };
+  const o = { out: '', pages: LIMITS.maxPages, relation: 'third-party', render: 'auto' };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const next = () => String(argv[++i] ?? '');
     if (a === '--out') o.out = next();
     else if (a === '--pages') o.pages = Number(next());
     else if (a === '--relation') o.relation = next();
+    else if (a === '--own') o.relation = 'own';
+    else if (a === '--no-render') o.render = 'off';
+    else if (a === '--render') o.render = 'force';
     else if (a === '--help' || a === '-h') o.help = true;
     else if (a.startsWith('--')) o.bad = a;
     else if (!o.url) o.url = a;
@@ -582,23 +706,24 @@ export function writeOutputs(dir, c, built) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'report.json'), `${JSON.stringify(built.report, null, 2)}\n`);
   fs.writeFileSync(path.join(dir, 'source.json'), `${JSON.stringify(built.source, null, 2)}\n`);
-  fs.writeFileSync(path.join(dir, 'requests.json'), `${JSON.stringify({ user_agent: c.ua, delay_ms: c.delayMs, pages_max: c.pagesMax, requests: c.log, skipped: c.skipped }, null, 2)}\n`);
+  fs.writeFileSync(path.join(dir, 'requests.json'), `${JSON.stringify({ user_agent: c.ua, delay_ms: c.delayMs, pages_max: c.pagesMax, render: c.render, requests: c.log, skipped: c.skipped }, null, 2)}\n`);
 }
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  const usage = '사용: node collect.mjs <주소> [--out <폴더>] [--pages 1~5] [--relation third-party|own]';
+  const usage = '사용: node collect.mjs <주소> [--out <폴더>] [--pages 1~5] [--own] [--no-render]';
   if (o.help) { console.log(usage); return; }
   if (o.bad || !o.url || !(o.pages >= 1) || !['own', 'third-party'].includes(o.relation)) { if (o.bad) console.error(`모르는 인자: ${o.bad}`); console.error(usage); process.exit(2); }
   const version = toolVersion();
   let c;
-  try { c = await collect(o.url, { version, maxPages: o.pages, onStep: (s) => console.log(`  ${s}`) }); } catch (e) { console.error(`멈춤  ${e.message}`); process.exit(e instanceof Stop ? 3 : 1); }
+  try { c = await collect(o.url, { version, maxPages: o.pages, render: o.render, onStep: (s) => console.log(`  ${s}`) }); } catch (e) { console.error(`멈춤  ${e.message}`); process.exit(e instanceof Stop ? 3 : 1); }
   if (!c.pages.length) { console.error(`멈춤  ${c.stop ? c.stop.message : '읽은 페이지가 없어요.'}`); process.exit(3); }
   const built = buildDraftFromPages(c, { relation: o.relation, version });
   const dir = path.resolve(o.out || outDirFor(o.url));
   writeOutputs(dir, c, built);
   console.log(`초안: ${path.join(dir, 'report.json')}  (요청 ${c.log.length}번, 페이지 ${c.pages.length}장)`);
   if (c.stop) console.log(`알림  ${c.stop.message}`);
+  if (built.thin) console.log(`알림  ${built.read.note} 다음: ${built.read.next}`);
   console.log('source.json 과 requests.json 은 내 컴퓨터에만 둡니다. 초안은 본 것만 옮긴 것이고, 해석은 스킬 절차대로 채웁니다.');
 }
 

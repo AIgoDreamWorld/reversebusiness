@@ -18,7 +18,7 @@
       arrive: '유입', first_value: '첫 가치', signup: '가입', payment: '결제', back: '다시 오기',
       observed: '관찰', inferred: '추정', unknown: '모름', blocks: '구역', none: '없음',
       fresh: ['문구', '이름', '색', '그림'], fresh_t: '새로 만든 것', not_taken: '가져오지 않음',
-      no_mine: '내 버전은 아직 없습니다', no_mine2: '명세가 채워지면 여기에 그려집니다', spec_only: '명세로 그린 자리',
+      no_mine: '아직 만들지 않음', no_mine2: '해부만 한 리포트입니다. 명세가 채워지면 여기에 그려집니다', spec_only: '명세로 그린 자리',
       end1: '확인한 만큼만 말합니다', motto: '모두를 위한 AI 교육', tagline: '주소 하나로 사업을 해부합니다', by_role: '층은 추정, 구역 순서는 관찰'
     },
     en: {
@@ -28,7 +28,7 @@
       arrive: 'Arrive', first_value: 'First value', signup: 'Sign-up', payment: 'Payment', back: 'Return',
       observed: 'OBSERVED', inferred: 'INFERRED', unknown: 'UNKNOWN', blocks: 'SECTIONS', none: 'none',
       fresh: ['Copy', 'Name', 'Color', 'Images'], fresh_t: 'Made new', not_taken: 'Not taken',
-      no_mine: 'No version of my own yet', no_mine2: 'It appears here once the spec is filled in', spec_only: 'Drawn from the spec',
+      no_mine: 'Not made yet', no_mine2: 'Dissection only so far. It appears here once the spec is filled in', spec_only: 'Drawn from the spec',
       end1: 'We only say what we confirmed', motto: 'AI education for everyone', tagline: 'One URL in, one business dissected', by_role: 'Layers are inferred, section order is observed'
     }
   };

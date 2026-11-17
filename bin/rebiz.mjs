@@ -36,7 +36,7 @@ const looksLikeUrl = (a) => /^https?:\/\//i.test(a) || /^(localhost|\d{1,3}(\.\d
 
 const COMMANDS = new Set(['install', 'demo', 'view', 'check', 'help', 'version', 'remove', 'uninstall']);
 function parse(argv) {
-  const o = { cmd: '', agents: [], dirs: [], rest: [], dryRun: false, force: false, project: false, open: true, yes: false, lang: '', pages: 5, relation: 'third-party' };
+  const o = { cmd: '', agents: [], dirs: [], rest: [], dryRun: false, force: false, project: false, open: true, yes: false, lang: '', pages: 5, relation: 'third-party', render: 'auto', dissectOnly: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const next = () => String(argv[++i] ?? '');
@@ -56,6 +56,10 @@ function parse(argv) {
     else if (a === '--lang') o.lang = next();
     else if (a === '--pages') o.pages = Number(next());
     else if (a === '--relation') o.relation = next();
+    else if (a === '--own') o.relation = 'own';
+    else if (a === '--no-render') o.render = 'off';
+    else if (a === '--render') o.render = 'force';
+    else if (a === '--dissect-only') o.dissectOnly = true;
     else if (a.startsWith('-')) { o.bad = a; }
     else o.rest.push(a);
   }
@@ -87,10 +91,10 @@ function help() {
   say();
   say('명령');
   say('  rebiz                         깔려 있는 에이전트를 찾아 설치 (Claude Code, Codex, Gemini CLI, Cursor, Antigravity)');
-  say('  rebiz <주소>                  robots.txt 확인 뒤 공개 페이지를 읽고 해부 화면 열기');
+  say('  rebiz <주소>                  robots.txt 확인 뒤 공개 페이지를 읽고 해부 화면 열기  (--own, --no-render)');
   say('  rebiz demo                    예시 해부 화면만 열기');
   say('  rebiz view <report.json>      리포트를 해부 화면으로 열기  (--mine <내 버전 폴더>, --out <파일>, --lang en)');
-  say('  rebiz check <report.json>     리포트 검사');
+  say('  rebiz check <report.json>     리포트 검사  (--dissect-only: 해부만 했을 때)');
   say('  rebiz draft <근거 JSON ...>   REA 근거에서 초안 만들기 (옵션은 draft --help)');
   say('  rebiz clone-check <폴더> --source <source.json>   내 버전이 원본과 겹치는지 검사');
   say();
@@ -103,6 +107,9 @@ function help() {
   say('  --dir <폴더>     스킬 폴더를 직접 지정      --project   지금 폴더의 .claude/skills');
   say('  --force          같은 이름의 다른 폴더가 있으면 백업하고 설치');
   say('  --out <폴더>     <주소> 를 읽은 결과를 둘 곳    --pages <1~5>   읽을 페이지 수');
+  say('  --own            <주소> 가 내 것일 때 (리포트에 내 것으로 적음)');
+  say('  --no-render      글이 얇아도 브라우저로 그려 읽지 않기   --render   항상 그려 읽기');
+  say('  --dissect-only   check 에서 내 버전 칸이 비어 있어도 통과 (해부만 했을 때)');
   promo();
 }
 
@@ -213,15 +220,16 @@ async function view(o) {
 
 async function check(o) {
   const file = o.rest[0];
-  if (!file) { say('사용: rebiz check <report.json>'); process.exitCode = 2; return; }
+  if (!file) { say('사용: rebiz check <report.json> [--dissect-only]'); process.exitCode = 2; return; }
   const { checkReport } = await tool('check-report.mjs');
   let r;
   try { r = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { say(`읽을 수 없습니다: ${e.message}`); process.exitCode = 2; return; }
-  const { errors, warnings, counts } = checkReport(r);
+  const { errors, warnings, counts, myVersion } = checkReport(r, { dissectOnly: o.dissectOnly });
   say(`관찰 ${counts.observed} · 추정 ${counts.inferred} · 모름 ${counts.unknown}`);
+  if (o.dissectOnly) say(`내 버전 칸  ${myVersion === 'empty' ? '아직 안 씀 (해부만 검사)' : '쓰여 있어서 함께 검사'}`);
   for (const w of warnings) say(`경고  ${w}`);
   for (const e of errors) say(`오류  ${e}`);
-  say(errors.length ? `오류 ${errors.length}개. 고친 뒤 다시 검사해 주세요.` : `통과 (경고 ${warnings.length}개)`);
+  say(errors.length ? `오류 ${errors.length}개. 고친 뒤 다시 검사해 주세요.` : `통과 (경고 ${warnings.length}개)${o.dissectOnly && myVersion === 'empty' ? ' · 해부만' : ''}`);
   if (errors.length) process.exitCode = 1;
 }
 
@@ -239,11 +247,12 @@ async function dissectUrl(o) {
   banner('가벼운 수집기');
   say(`${T.dim('대상')}  ${input}`);
   say(T.dim('공개 페이지만 읽습니다: robots.txt 먼저, 최대 5장, 요청 사이 2초, 로그인과 폼 제출 없음, 쿠키 저장 없음.'));
+  if (o.relation === 'own') say(T.dim('내 것으로 적습니다 (--own). 읽는 방식과 한도는 같습니다.'));
   say();
   const started = Date.now();
   let c;
   try {
-    c = await collect(input, { version: PKG.version, maxPages: o.pages, onStep: (s) => say(`  ${T.dim('·')} ${s}`) });
+    c = await collect(input, { version: PKG.version, maxPages: o.pages, render: o.render, onStep: (s) => say(`  ${T.dim('·')} ${s}`) });
   } catch (e) {
     say(`${T.gold('멈춤')}  ${e.message}`);
     process.exitCode = e instanceof Stop ? 3 : 1;
@@ -265,7 +274,13 @@ async function dissectUrl(o) {
   if (c.stop) say(`${T.dim('알림')}    ${c.stop.message}`);
   for (const s of c.skipped) say(`${T.dim('건너뜀')}  ${s.url}  ${T.dim(s.why)}`);
   say(`${T.dim('문장')}    관찰 ${counts.observed} · 추정 ${counts.inferred} · 모름 ${counts.unknown}`);
-  if (built.thin) say(T.dim('  받은 HTML 에 글이 적습니다. 스크립트로 그리는 화면은 이 수집기가 보지 못합니다. 에이전트와 함께 채우면 더 정확합니다.'));
+  if (c.render.mode === 'used') say(`${T.dim('그려 읽기')} ${c.render.browser} 임시 프로필로 ${c.render.pages}장. 브라우저를 끄고 프로필을 지웠습니다${c.render.blocked ? `. 브라우저 안에서 보내지 않은 요청 ${c.render.blocked}개` : ''}.`);
+  else if (c.render.mode === 'failed') say(`${T.dim('그려 읽기')} 실패: ${c.render.error || ''} 받은 HTML 만 읽었습니다.`);
+  if (built.thin) {
+    say();
+    say(`${T.gold('얇은 결과')}  ${built.read.note}`);
+    say(`${T.dim('다음')}       ${built.read.next}`);
+  }
   say();
   await showView(path.join(dir, 'report.json'), { out: path.join(dir, 'report.html'), lang: o.lang, open: o.open });
   say(`${T.dim('저장')}    ${tilde(dir)}${path.sep}  report.json · report.html · source.json · requests.json`);

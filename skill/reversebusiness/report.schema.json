@@ -54,12 +54,17 @@
           "type": "object",
           "required": ["status", "note"],
           "properties": {
-            "status": { "enum": ["checked", "not-applicable", "not-found"] },
+            "status": { "enum": ["checked", "robots-only", "not-applicable", "not-found"], "description": "checked 는 약관 조항까지 읽었을 때만. robots-only 는 robots.txt 까지만 확인하고 약관은 아직 읽지 못한 상태. not-applicable 은 내 것일 때만." },
             "note": { "type": "string" },
             "evidence": { "$ref": "#/$defs/evidenceRefs" }
           }
         },
-        "one_line": { "type": "string", "description": "이 사업을 한 문장으로." }
+        "one_line": { "type": "string", "description": "이 사업을 한 문장으로." },
+        "read": {
+          "type": "object",
+          "description": "선택. 가벼운 수집기가 적는 읽은 방식. mode 는 html(받은 HTML 만) 또는 rendered(브라우저가 그린 화면). thin 이 true 면 읽은 글이 적어 모름이 많다는 뜻이고 화면 맨 위에 알림이 뜬다.",
+          "properties": { "mode": { "enum": ["html", "rendered"] }, "chars": { "type": "number" }, "html_chars": { "type": "number" }, "thin": { "type": "boolean" }, "note": { "type": "string" }, "next": { "type": "string" } }
+        }
       }
     },
     "evidence": {

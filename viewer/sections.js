@@ -12,7 +12,7 @@
       observed: '관찰', inferred: '추정', unknown: '모름', missing: '리포트에 이 단계가 없습니다.',
       cmp_title: '원본 뼈대에서 내 버전으로', cmp_sub: '배우는 것은 구역의 순서와 짜임뿐입니다. 문구, 이름, 색, 그림은 새로 만듭니다.',
       cmp_a: '원본 뼈대', cmp_b: '내 버전', cmp_play: '전환 보기', not_taken: '가져오지 않음',
-      no_mine_t: '내 버전은 아직 없습니다', no_mine: '리포트 6번 칸의 명세만 에이전트에게 넘겨 새로 만들게 한 뒤, 이렇게 다시 엽니다.', no_mine_cmd: 'rebiz view report.json --mine ./my-version',
+      no_mine_t: '아직 만들지 않음', no_mine: '내 버전은 아직 없습니다. 리포트 6번 칸의 명세만 에이전트에게 넘겨 새로 만들게 한 뒤, 이렇게 다시 엽니다.', no_mine_cmd: 'rebiz view report.json --mine ./my-version',
       no_skel: '이 리포트에는 구역 뼈대가 없어 다섯 단계로 대신 그렸습니다.',
       attract: '데려오는 층', value: '가치를 주는 층', pay: '돈 받는 층', other: '그 밖', role_return: '다시 오게 하는 층',
       motto: '모두를 위한 AI 교육', frame_title: '내 버전 미리보기'
@@ -26,7 +26,7 @@
       observed: 'OBSERVED', inferred: 'INFERRED', unknown: 'UNKNOWN', missing: 'The report has no entry for this step.',
       cmp_title: 'From the skeleton to my version', cmp_sub: 'Only the order and arrangement of sections is learned. Copy, names, colors and images are made new.',
       cmp_a: 'Original skeleton', cmp_b: 'My version', cmp_play: 'Play transition', not_taken: 'Not taken',
-      no_mine_t: 'No version of my own yet', no_mine: 'Hand only the cell 6 spec to your agent, let it build a new page, then open it again like this.', no_mine_cmd: 'rebiz view report.json --mine ./my-version',
+      no_mine_t: 'Not made yet', no_mine: 'There is no version of my own yet. Hand only the cell 6 spec to your agent, let it build a new page, then open it again like this.', no_mine_cmd: 'rebiz view report.json --mine ./my-version',
       no_skel: 'This report has no section skeleton, so the five steps are drawn instead.',
       attract: 'Attract layer', value: 'Value layer', pay: 'Pay layer', other: 'Other', role_return: 'Return layer',
       motto: 'AI education for everyone', frame_title: 'My version preview'

@@ -15,9 +15,11 @@ reversebusiness 는 사업 웹사이트 주소 하나를 받아 그 사업을 �
    npx github:wonseokjung/reversebusiness <주소> --no-open
    ```
 
-   사용자가 이미 만든 `report.json` 을 주면 그 파일에서 이어서 채웁니다.
-3. 초안의 모름 칸을 스킬 절차대로 채우고 `rebiz check report.json` 이 통과할 때까지 고칩니다.
+   사용자가 "내 것"이라고 하면 `--own` 을 붙입니다. 사용자가 이미 만든 `report.json` 을 주면 그 파일에서 이어서 채웁니다.
+3. 초안의 모름 칸을 스킬 절차대로 채우고 검사가 통과할 때까지 고칩니다. 해부만 부탁받았으면 `rebiz check report.json --dissect-only`, 내 버전까지 만들었으면 `rebiz check report.json`. 고칠 때는 `report.json` 을 직접 고친 뒤 다시 검사합니다. 리포트를 고치려고 따로 스크립트를 만들지 않습니다.
 4. `rebiz view report.json` 으로 해부 화면을 열어 사용자에게 보여 줍니다.
+
+받은 HTML 의 글이 얇으면 수집기가 이 컴퓨터의 Chrome 계열 브라우저를 임시 프로필로 잠깐 띄워 그려진 화면을 읽습니다(누르기와 입력 없음, `--no-render` 로 끔). 브라우저가 없어 결과가 얇으면 출력 끝의 "다음" 줄을 따릅니다.
 
 수집기가 종료 코드 3 으로 멈추면(robots.txt 금지, 401, 403, 429, 사람 확인 화면) 다른 길로 돌아 들어가지 않습니다. 멈춘 이유를 사용자에게 그대로 알립니다.
 

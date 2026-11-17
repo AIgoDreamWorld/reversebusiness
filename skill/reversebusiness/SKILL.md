@@ -5,7 +5,7 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 
 # reversebusiness: 사업 해부
 
-**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs.
+**English summary.** This skill makes a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Antigravity) dissect a business from one website URL instead of copying it. From publicly observable material only, it fills six fixed boxes: who pays and why, the core user flow, a screen and feature map, the observable tech setup, an evidence ledger with explicit unknowns, and a clean-room spec for a different product that solves the same problem. Every statement is tagged observed, inferred or unknown and points to an evidence entry. It never bypasses logins, paywalls or access limits, never bulk-crawls, and never copies code, copy, images or brand. Output is a `report.json` in a fixed schema plus a single-file dissection view (money flow diagram, layered wireframe scene, skeleton to my-version comparison, 9:16 video export). A light collector (`tools/collect.mjs`) reads up to five public pages after checking robots.txt; when the received HTML is thin it opens the page once in a headless Chromium-family browser with a throwaway profile and reads the drawn page, with no clicks or input. When REA (a separate MIT tool) is installed, its Evidence JSON can seed the report draft instead (`tools/from-rea.mjs`). After the report, the agent builds a new page from the clean-room spec only and runs `tools/check-clone.mjs`, which fails on any run of five identical words, the target's brand names or domains, or the target's asset URLs.
 
 ## 지켜야 할 선 (먼저 읽고, 어기는 요청은 거절한다)
 
@@ -27,26 +27,32 @@ description: 사업 웹사이트 주소 하나를 받아 그 사업을 해부한
 사용자에게 아래가 비어 있으면 한 번에 묻는다. 대상이 불분명하면 임의로 고르지 않는다.
 
 - **대상**: 이름과 주소(또는 폴더).
-- **관계**: `own`(내 것, 소스를 읽어도 된다) 또는 `third-party`(남의 것, 공개된 것만).
-- **알고 싶은 것**: 기본은 6칸 전부. 특별히 궁금한 질문이 있으면 받아 둔다.
+- **관계**: `own`(내 것, 소스를 읽어도 된다) 또는 `third-party`(남의 것, 공개된 것만). 사용자가 "내 것", "내 사이트", "우리 서비스"라고 하면 `own` 이고, 수집기를 돌릴 때 `--own` 을 붙인다. 말이 없으면 `third-party` 로 둔다.
+- **어디까지**: "해부만"(1~4단계, 6번 칸은 비워 둔다) 또는 "내 버전까지"(1~7단계). 사용자가 분석, 해부, 조사만 부탁했으면 해부만이다. 내 버전을 만들지는 사용자가 원할 때만 이어 간다.
+- **알고 싶은 것**: 기본은 6칸 가운데 1~5번. 특별히 궁금한 질문이 있으면 받아 둔다.
 
 ## 절차 (읽기, 해부, 만들기, 검사)
 
 | 큰 단계 | 하는 일 | 아래 단계 |
 |---|---|---|
 | 읽기 | 범위를 긋고 공개된 것에서 근거를 모은다 | 1, 2 |
-| 해부 | 6칸을 채우고 모르는 것을 정리하고 내 버전 명세를 쓴다 | 3, 4, 5 |
-| 만들기 | 명세만 보고 내 버전을 새로 만든다 | 6 |
+| 해부 | 1~5번 칸을 채우고 모르는 것을 정리한다 | 3, 4 |
+| 만들기 | 내 버전 명세(6번 칸)를 쓰고, 명세만 보고 내 버전을 새로 만든다 | 5, 6 |
 | 검사 | 원본과 겹치지 않는지 확인한다 | 7 |
 
-사용자가 해부만 원하면 5단계에서 멈춘다.
+두 가지 길이 있다.
+
+- **해부만**: 1~4단계까지 하고 멈춘다. 6번 칸(`my_version`)은 빈 채로 둔다. 검사는 `check-report.mjs ./report.json --dissect-only` 로 하고, 화면에는 내 버전 자리에 "아직 만들지 않음"이라고 나온다.
+- **내 버전까지**: 5~7단계를 이어서 한다. 검사는 옵션 없이 `check-report.mjs ./report.json`.
+
+리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 검사기를 다시 돌린다. 리포트를 고치려고 따로 스크립트를 만들어 돌리지 않는다.
 
 가장 빠른 시작: `node "<이 스킬 폴더>/tools/collect.mjs" <주소>` 로 초안을 만들고(아래 "가벼운 수집기"), 3단계부터 이어서 채운다. 사용자가 이미 `rebiz <주소>` 로 만든 `report.json` 을 주면 그 파일에서 3단계부터 시작한다.
 
 ### 1단계. 범위와 선 긋기
 
 - 대상, 관계, 볼 범위를 한 줄씩 적는다 (`meta.scope`).
-- 남의 것: 이용약관과 robots.txt 확인 결과를 `meta.terms` 에 적는다. 내 것: `not-applicable`.
+- 남의 것: 이용약관과 robots.txt 확인 결과를 `meta.terms` 에 적는다. `status` 는 약관 조항까지 읽었으면 `checked`, robots.txt 까지만 확인하고 약관을 아직 못 읽었으면 `robots-only`, 둘 다 찾지 못했으면 `not-found`. 수집기 초안은 `robots-only` 로 나오므로, 약관을 읽은 뒤 `checked` 로 바꾸고 `note` 에 한 줄 적는다. 내 것: `not-applicable`.
 - 볼 자료 목록을 먼저 만든다. 남의 것이면 공개 자료만: 랜딩, 가격, 도움말, 공개 문서, 공개 데모 영상, 대상이 직접 공개한 화면, 공개 리뷰.
 
 ### 2단계. 근거 장부 만들기
@@ -97,11 +103,14 @@ REA 는 이 스킬과 별개의 도구다(MIT, 공식 저장소에서만 받는�
 node "<이 스킬 폴더>/tools/collect.mjs" <주소> --out ./rebiz-out
 ```
 
-- 하는 일: robots.txt 를 먼저 받고, 허용된 경우에만 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장을 GET 으로 한 번씩 받는다. 요청 사이 2초 이상(robots.txt 의 Crawl-delay 가 더 길면 그 값, 60초보다 길면 멈춤). 스크립트를 실행하지 않는다.
+- 내 것이면 `--own` 을 붙인다. 읽는 방식과 한도는 같고, 리포트에 내 것으로 적힌다.
+- 하는 일: robots.txt 를 먼저 받고, 허용된 경우에만 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장을 읽는다. 요청 사이 2초 이상(robots.txt 의 Crawl-delay 가 더 길면 그 값, 60초보다 길면 멈춤).
+- 그려진 화면 읽기: 요즘 사이트는 화면을 스크립트로 그려서, 받은 HTML 에 글이 거의 없는 경우가 많다. 받은 글이 얇으면(1,500자 미만이거나 가격과 누르는 곳이 하나도 안 보일 때) 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 **임시 프로필의 헤드리스 창**으로 잠깐 띄워 그려진 화면을 한 번 읽는다. 누르기, 입력, 화면 캡처는 없다. 브라우저 안에서 나가는 요청도 같은 선으로 거른다(GET 이 아닌 요청, robots.txt 가 막은 주소, 로그인과 결제 주소, 분석 도구는 보내지 않는다). 끝나면 브라우저를 끄고 임시 프로필을 지운다. 구역의 뼈대도 이때 실제 위치와 길이로 잰다. `--no-render` 로 끌 수 있다.
+- 브라우저가 없으면 받은 HTML 만 읽고, 결과 끝에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나온다. 그때는 REA 가 있으면 위의 "REA 가 있으면" 순서로 읽고, 없으면 사용자가 직접 본 화면의 메모를 받아 채운다.
 - 하지 않는 일: 로그인, 가입, 결제, 폼 제출, 쿠키 저장. 로그인이나 결제로 가는 링크는 열지 않는다. 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춘다(종료 코드 3). 멈추면 다른 방법으로 돌아 들어가지 말고 사용자에게 알린다.
 - 나오는 것: `report.json`(본 것만 관찰, 나머지는 모름인 초안), `source.json`(겹침 검사용 원본 글 묶음, 올리지 않는다), `requests.json`(보낸 요청 기록).
-- 초안에는 `skeleton`(구역의 뼈대)이 규칙으로 채워져 있다. 길이와 층 이름은 어림이므로 3단계에서 직접 보고 고친다.
-- 스크립트로 그리는 페이지는 받은 HTML 에 글이 거의 없다. 그때는 초안에 그렇게 적히고, 브라우저 도구로 직접 보거나 사용자가 본 화면의 메모를 받아 채운다.
+- 초안에는 `skeleton`(구역의 뼈대)이 채워져 있다. 그려 읽었으면 길이는 잰 값이고, 아니면 어림이다. 층 이름은 어느 쪽이든 규칙으로 붙인 추정이므로 3단계에서 직접 보고 고친다.
+- 초안의 `meta.read` 에 읽은 방식과 글자 수가 적힌다. `thin` 이 true 면 화면 맨 위에 알림이 뜬다. 에이전트가 화면을 직접 보고 칸을 채웠으면 `meta.read.thin` 을 false 로 고친다.
 - 도구를 쓸 수 없으면 `report.template.json` 을 복사해 처음부터 채운다. 한도, 약관 확인, 가리기 규칙은 똑같다.
 
 #### 도구: REA 근거에서 초안 만들기 (`tools/from-rea.mjs`)
@@ -160,7 +169,16 @@ node "<이 스킬 폴더>/tools/from-rea.mjs" evidence/03_inspect_page.json evid
 - 칸마다 "이 칸에서 모르는 것"을 다시 훑어 `unknowns` 에 올린다. 가격, 매출, 고객 수, 전환, 서버 쪽 로직은 밖에서 대부분 모른다.
 - 모르는 것이 0개인 리포트는 의심한다. 다시 확인한다.
 
-### 5단계. 내 버전 명세 (클린룸) 쓰고 저장
+#### 해부만 할 때는 여기서 저장하고 검사한다
+
+```bash
+node "<이 스킬 폴더>/tools/check-report.mjs" ./report.json --dissect-only    # 내 버전 칸이 비어 있어도 통과
+node "<이 스킬 폴더>/tools/build-view.mjs" ./report.json --open
+```
+
+오류가 나오면 `report.json` 을 직접 고치고 다시 검사한다.
+
+### 5단계. 내 버전 명세 (클린룸) 쓰고 저장 (내 버전까지 갈 때만)
 
 - 6번 칸은 1~5번 칸의 내 문장만 보고 쓴다. 대상의 화면 문구, 캡처, 코드를 옆에 두고 쓰지 않는다.
 - 같은 문제를 푸는 **다른** 제품의 최소 명세를 쓴다: 누구의 어떤 문제, 최소 기능 3~5개, 차별점 정확히 3개(대상, 형태, 방식, 가격, 유통 중에서), 가져오지 않는 것 목록.
@@ -220,7 +238,7 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
     "analyst": "",
     "scope": "",
     "method": [],
-    "terms": { "status": "checked", "note": "", "evidence": [] },
+    "terms": { "status": "checked | robots-only | not-found | not-applicable", "note": "", "evidence": [] },
     "one_line": ""
   },
   "evidence": [ { "id": "E1", "type": "url", "ref": "https://...", "note": "", "seen_at": "YYYY-MM-DD" } ],
@@ -239,12 +257,13 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
 
 ## 끝내기 전 검수
 
-- [ ] `check-report.mjs` 오류 0개.
+- [ ] `check-report.mjs` 오류 0개 (해부만 했으면 `--dissect-only`). 고칠 때는 `report.json` 을 직접 고쳤다.
+- [ ] `meta.terms.status` 가 실제로 한 만큼만 적혀 있다 (약관을 읽지 않았으면 `checked` 가 아니다).
 - [ ] 관찰과 추정마다 근거가 있고, 근거를 열면 그 말이 실제로 보인다 (3개 이상 직접 다시 열어 확인).
 - [ ] 수익, 사용자 수 숫자는 공개 주소가 붙은 것만 남았다. 없으면 `revenue` 는 빈 배열.
 - [ ] 가입, 첫 가치, 결제 단계가 모두 있다 (없음이나 모름도 한 줄로). 유입과 다시 오기도 적었다.
 - [ ] `skeleton` 의 이름이 내 말이고, 원본의 문구, 캡처, 로고가 들어 있지 않다.
-- [ ] 6번 칸에 대상의 이름, 문구, 화면 이름이 없다. 차별점이 정확히 3개다.
+- [ ] (내 버전까지 갔다면) 6번 칸에 대상의 이름, 문구, 화면 이름이 없다. 차별점이 정확히 3개다.
 - [ ] 리포트에 비밀 값, 이메일, 내 컴퓨터의 절대 경로가 없다.
 - [ ] 로그인, 결제, 접근 제한을 넘은 적이 없고, 본 공개 페이지가 한도 안이다.
 - [ ] 내가 띄운 브라우저를 껐고, 모은 원본 자료는 `evidence/` 밖으로 나가지 않았다.
@@ -252,4 +271,4 @@ node "<이 스킬 폴더>/tools/check-clone.mjs" ./my-version --source evidence/
 
 ## 사용자에게 보고하는 법
 
-짧게 다섯 줄: 한 줄 요약, 관찰 / 추정 / 모름 개수, 가장 중요한 모르는 것 3개, 내 버전 차별점 3개, `report.json` 과 해부 화면(`report.html`) 위치. 해부 화면의 "영상으로 저장" 단추로 해부 과정을 9:16 영상으로 받을 수 있다는 것도 한 줄로 알린다. 내 버전까지 만들었으면 겹침 검사 결과와 내 버전 위치를 한 줄 더한다. 그리고 "모르는 것 중 사용자가 직접 확인해 줄 수 있는 것"을 물어본다.
+짧게 다섯 줄: 한 줄 요약, 관찰 / 추정 / 모름 개수, 가장 중요한 모르는 것 3개, 내 버전 차별점 3개(해부만 했으면 "내 버전은 아직 만들지 않음"), `report.json` 과 해부 화면(`report.html`) 위치. 해부 화면의 "영상으로 저장" 단추로 해부 과정을 9:16 영상으로 받을 수 있다는 것도 한 줄로 알린다. 내 버전까지 만들었으면 겹침 검사 결과와 내 버전 위치를 한 줄 더한다. 그리고 "모르는 것 중 사용자가 직접 확인해 줄 수 있는 것"을 물어본다.

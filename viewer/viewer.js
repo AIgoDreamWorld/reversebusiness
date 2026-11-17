@@ -16,12 +16,13 @@
       tally_title: '이 리포트의 문장', tally_note_a: '따로 정리한 모르는 것 ', tally_note_b: '건', evidence_n: '근거 ',
       m_date: '분석일', m_rel: '관계', m_scope: '범위', m_method: '방법', m_terms: '이용약관', m_by: '분석', m_url: '주소',
       own: '내 것 (소스 읽기 가능)', third: '남의 것 (공개된 것만)',
-      terms_checked: '확인함', 'terms_not-applicable': '해당 없음', 'terms_not-found': '찾지 못함',
+      terms_checked: '확인함', 'terms_robots-only': 'robots.txt 만 확인 (약관은 아직 읽지 않음)', 'terms_not-applicable': '해당 없음', 'terms_not-found': '찾지 못함',
+      thin_a: '읽은 글이 ', thin_b: '자뿐이라 모름이 많습니다.', thin_next: '다음에 할 일: ', read_rendered: '브라우저가 그린 화면을 읽음', read_html: '받은 HTML 만 읽음', m_read: '읽은 방식', chars: '자',
       c1: '누가 왜 돈을 내는가', c2: '핵심 사용자 흐름', c3: '화면과 기능 지도', c4: '기술 구성', c5: '근거와 모르는 것', c6: '내 버전 명세',
       customer: '고객', problem: '문제', price: '가격', revenue: '공개된 숫자',
       revenue_empty: '공개된 근거가 있는 숫자가 없어 비워 둠',
       signup: '가입', first_value: '첫 가치', payment: '결제', arrive: '유입', 'return': '다시 오기', other: '단계',
-      draft: '자동 초안', no_one_line: '한 줄 요약은 아직 비어 있습니다. 에이전트가 읽고 채웁니다.', spec_empty: '내 버전 명세는 아직 비어 있습니다. 에이전트에게 이 리포트를 넘겨 채우게 하세요.',
+      draft: '자동 초안', no_one_line: '한 줄 요약은 아직 비어 있습니다. 에이전트가 읽고 채웁니다.', spec_empty: '아직 만들지 않음. 해부만 한 리포트입니다. 내 버전까지 가려면 에이전트에게 이 리포트를 넘겨 6번 칸을 채우게 하세요.',
       unknowns: '모르는 것', ledger: '근거 장부', why: '이유', next: '알아낼 방법', from_cell: '칸',
       none_unknown: '따로 정리한 항목 없음',
       idx_evidence: '근거', idx_unknowns: '모르는 것', idx_diff: '차별점', idx_mvp: '최소 기능',
@@ -38,12 +39,13 @@
       tally_title: 'STATEMENTS IN THIS REPORT', tally_note_a: 'Open questions listed: ', tally_note_b: '', evidence_n: 'Evidence ',
       m_date: 'DATE', m_rel: 'RELATION', m_scope: 'SCOPE', m_method: 'METHOD', m_terms: 'TERMS', m_by: 'ANALYST', m_url: 'URL',
       own: 'Own product (source readable)', third: 'Third party (public material only)',
-      terms_checked: 'Checked', 'terms_not-applicable': 'Not applicable', 'terms_not-found': 'Not found',
+      terms_checked: 'Checked', 'terms_robots-only': 'robots.txt only (terms not read yet)', 'terms_not-applicable': 'Not applicable', 'terms_not-found': 'Not found',
+      thin_a: 'Only ', thin_b: ' characters could be read, so many items are unknown.', thin_next: 'Next: ', read_rendered: 'Read from the page as drawn by a browser', read_html: 'Read from the received HTML only', m_read: 'READ', chars: ' chars',
       c1: 'Who pays, and why', c2: 'Core user flow', c3: 'Screen and feature map', c4: 'Tech setup', c5: 'Evidence and unknowns', c6: 'My version spec',
       customer: 'CUSTOMER', problem: 'PROBLEM', price: 'PRICE', revenue: 'PUBLIC NUMBERS',
       revenue_empty: 'Left empty: no number with a public source',
       signup: 'SIGN-UP', first_value: 'FIRST VALUE', payment: 'PAYMENT', arrive: 'ARRIVE', 'return': 'RETURN', other: 'STEP',
-      draft: 'AUTO DRAFT', no_one_line: 'The one-line summary is still empty. Your agent fills it in.', spec_empty: 'The spec for my version is still empty. Hand this report to your agent to fill it in.',
+      draft: 'AUTO DRAFT', no_one_line: 'The one-line summary is still empty. Your agent fills it in.', spec_empty: 'Not made yet. This report covers the dissection only. To go on to your own version, hand it to your agent to fill in cell 6.',
       unknowns: 'UNKNOWNS', ledger: 'EVIDENCE LEDGER', why: 'WHY', next: 'HOW TO FIND OUT', from_cell: 'CELL',
       none_unknown: 'No separate items',
       idx_evidence: 'EVIDENCE', idx_unknowns: 'UNKNOWNS', idx_diff: 'DIFFERENCES', idx_mvp: 'FEATURES',
@@ -207,6 +209,15 @@
     $('h-name').textContent = str(tg.name);
     $('h-line').textContent = str(m.one_line) || t('no_one_line');
     $('h-line').classList.toggle('is-empty', !str(m.one_line));
+    // 읽은 글이 얇으면 맨 위에 작게 알린다.
+    var rd = m.read && typeof m.read === 'object' ? m.read : null;
+    var thin = $('h-thin');
+    thin.hidden = !(rd && rd.thin);
+    thin.textContent = '';
+    if (rd && rd.thin) {
+      thin.appendChild(el('b', null, t('thin_a') + Number(rd.chars || 0) + t('thin_b')));
+      if (lang === 'ko' && str(rd.next)) thin.appendChild(document.createTextNode(' ' + t('thin_next') + str(rd.next)));
+    }
     document.title = str(tg.name) + ' · reversebusiness';
 
     var dl = $('h-meta');
@@ -225,6 +236,7 @@
       a.href = str(tg.url); a.target = '_blank'; a.rel = 'noopener noreferrer';
       row('m_url', a);
     }
+    if (m.read && typeof m.read === 'object') row('m_read', t(m.read.mode === 'rendered' ? 'read_rendered' : 'read_html') + ' · ' + Number(m.read.chars || 0) + t('chars'));
     row('m_scope', str(m.scope));
     row('m_method', arr(m.method).map(str).join(' / '));
     var terms = m.terms || {};

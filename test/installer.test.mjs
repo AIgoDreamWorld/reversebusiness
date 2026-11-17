@@ -64,7 +64,7 @@ test('--yes: 찾은 에이전트에 설치하고, 예시 해부 화면을 만들
   assert.equal(r.status, 0, r.out);
   for (const p of [['.claude', 'skills'], ['.agents', 'skills'], ['.gemini', 'config', 'skills']]) {
     const d = skillAt(dir, ...p);
-    for (const f of ['SKILL.md', '.rebiz.json', 'report.schema.json', 'tools/collect.mjs', 'tools/check-report.mjs', 'tools/build-view.mjs', 'viewer/index.html', 'viewer/stage.js']) assert.ok(fs.existsSync(path.join(d, f)), `${d}/${f}`);
+    for (const f of ['SKILL.md', '.rebiz.json', 'report.schema.json', 'tools/collect.mjs', 'tools/render.mjs', 'tools/check-report.mjs', 'tools/build-view.mjs', 'viewer/index.html', 'viewer/stage.js']) assert.ok(fs.existsSync(path.join(d, f)), `${d}/${f}`);
     assert.equal(JSON.parse(fs.readFileSync(path.join(d, '.rebiz.json'), 'utf8')).package, 'rebiz');
   }
   assert.match(r.out, /Codex, Cursor\s+~\/\.agents\/skills\/reversebusiness/, 'Codex 와 Cursor 는 공용 폴더 한 벌');

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // reversebusiness report.json 검사기. 의존성 없음.
-// 사용: node check-report.mjs <report.json>
+// 사용: node check-report.mjs <report.json> [--dissect-only]
+//   --dissect-only  해부만 한 리포트를 검사한다. 내 버전 칸(6번)이 비어 있어도 통과한다.
 // 오류가 있으면 종료 코드 1. 경고만 있으면 0.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -10,21 +11,23 @@ const EV_TYPES = ['url', 'screen', 'doc', 'file', 'run'];
 const STAGES = ['arrive', 'first_value', 'signup', 'payment', 'return', 'other'];
 const ROLES = ['attract', 'value', 'pay', 'return', 'other'];
 const KINDS = ['web-service', 'desktop-app', 'mobile-app', 'local-tool', 'other'];
-const TERMS = ['checked', 'not-applicable', 'not-found'];
+// checked: 약관 조항까지 읽음. robots-only: robots.txt 까지만 확인하고 약관은 아직 못 읽음. not-found: 둘 다 찾지 못함.
+const TERMS = ['checked', 'robots-only', 'not-applicable', 'not-found'];
 const COPY_WORDS = /(클론|clone|카피|copycat|짝퉁)/i;
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const isStr = (v) => typeof v === 'string';
 const filled = (v) => isStr(v) && v.trim().length > 0;
 
-export function checkReport(r) {
+export function checkReport(r, { dissectOnly = false } = {}) {
   const errors = [];
   const warnings = [];
   const err = (where, msg) => errors.push(`${where}: ${msg}`);
   const warn = (where, msg) => warnings.push(`${where}: ${msg}`);
   const counts = { observed: 0, inferred: 0, unknown: 0 };
+  let myVersion = 'filled';
 
-  if (!isObj(r)) return { errors: ['report: JSON 객체가 아니에요'], warnings, counts };
+  if (!isObj(r)) return { errors: ['report: JSON 객체가 아니에요'], warnings, counts, myVersion };
   if (r.schema !== 'rebiz/report@1') err('schema', '"rebiz/report@1" 이어야 해요');
 
   // ---- meta
@@ -48,6 +51,7 @@ export function checkReport(r) {
       if (!filled(m.terms.note)) err('meta.terms.note', '이용약관 확인 결과를 한 줄 적어 주세요');
       if (isObj(t) && t.relation === 'third-party' && m.terms.status === 'not-applicable')
         err('meta.terms.status', '남의 서비스는 not-applicable 을 쓸 수 없어요. 약관을 확인하고 checked 또는 not-found');
+      if (m.terms.status === 'robots-only') warn('meta.terms.status', 'robots.txt 까지만 확인한 상태예요. 이용약관을 읽은 뒤 checked 로 바꾸고 note 에 한 줄 적어 주세요');
     }
   }
   const relation = isObj(t) ? t.relation : null;
@@ -100,7 +104,7 @@ export function checkReport(r) {
   const s = r.sections;
   if (!isObj(s)) {
     err('sections', '없어요');
-    return { errors, warnings, counts };
+    return { errors, warnings, counts, myVersion };
   }
 
   // ---- 1 money
@@ -176,7 +180,10 @@ export function checkReport(r) {
 
   // ---- 6 my_version
   const mv = s.my_version;
-  if (!isObj(mv)) err('sections.my_version', '6번 칸이 없어요');
+  // 해부만 할 때: 내 버전 칸을 하나도 쓰지 않았으면 "아직 안 씀"으로 두고 넘어간다. 쓰기 시작했으면 끝까지 검사한다.
+  const blank = !isObj(mv) || (!filled(mv.working_name) && !filled(mv.same_problem) && !filled(mv.who) && !(Array.isArray(mv.mvp) && mv.mvp.length) && !(Array.isArray(mv.not_taken) && mv.not_taken.length) && !(Array.isArray(mv.differences) && mv.differences.some((d) => isObj(d) && (filled(d.title) || filled(d.text)))));
+  if (blank) myVersion = 'empty';
+  if (dissectOnly && blank) { /* 아직 안 씀 */ } else if (!isObj(mv)) err('sections.my_version', '6번 칸이 없어요');
   else {
     for (const k of ['working_name', 'same_problem', 'who']) if (!filled(mv[k])) err(`my_version.${k}`, '비었어요');
     if (!Array.isArray(mv.mvp) || mv.mvp.length === 0) err('my_version.mvp', '최소 기능을 한 줄 이상');
@@ -213,13 +220,15 @@ export function checkReport(r) {
   if (/(sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{12,}|AIza[0-9A-Za-z_-]{20,})/.test(raw)) err('report', '비밀 키처럼 보이는 글자가 있어요. 지워 주세요');
   for (const id of ids) if (!used.has(id)) warn('evidence', `${id} 는 어떤 주장에도 쓰이지 않았어요`);
 
-  return { errors, warnings, counts };
+  return { errors, warnings, counts, myVersion };
 }
 
 function main() {
-  const file = process.argv[2];
+  const args = process.argv.slice(2);
+  const dissectOnly = args.includes('--dissect-only');
+  const file = args.find((a) => !a.startsWith('--'));
   if (!file) {
-    console.error('사용: node check-report.mjs <report.json>');
+    console.error('사용: node check-report.mjs <report.json> [--dissect-only]');
     process.exit(2);
   }
   let r;
@@ -229,11 +238,12 @@ function main() {
     console.error(`읽을 수 없어요: ${e.message}`);
     process.exit(2);
   }
-  const { errors, warnings, counts } = checkReport(r);
+  const { errors, warnings, counts, myVersion } = checkReport(r, { dissectOnly });
   console.log(`관찰 ${counts.observed} · 추정 ${counts.inferred} · 모름 ${counts.unknown}`);
+  if (dissectOnly) console.log(`내 버전 칸  ${myVersion === 'empty' ? '아직 안 씀 (해부만 검사)' : '쓰여 있어서 함께 검사'}`);
   for (const w of warnings) console.log(`경고  ${w}`);
   for (const e of errors) console.log(`오류  ${e}`);
-  console.log(errors.length ? `오류 ${errors.length}개. 고친 뒤 다시 검사해 주세요.` : `통과 (경고 ${warnings.length}개)`);
+  console.log(errors.length ? `오류 ${errors.length}개. 고친 뒤 다시 검사해 주세요.` : `통과 (경고 ${warnings.length}개)${dissectOnly && myVersion === 'empty' ? ' · 해부만' : ''}`);
   process.exit(errors.length ? 1 : 0);
 }
 

@@ -52,6 +52,8 @@ npx github:wonseokjung/reversebusiness https://example.com
 | 3. 내 버전 만들기 | 6번 칸의 명세만 보고 새로 만든다. 문구, 이름, 색, 그림은 전부 새로 | 내 버전 폴더 |
 | 4. 검사 | 원본과 겹치는 문장, 이름, 그림 주소가 없는지 본다 | 통과 또는 겹친 곳 목록 |
 
+2단계에서 멈추는 "해부만"도 됩니다. 그때 내 버전 칸은 비워 두고 `check --dissect-only` 로 검사하며, 화면에는 내 버전 자리에 "아직 만들지 않음"이라고 나옵니다.
+
 6칸: 누가 왜 돈을 내는가 / 핵심 사용자 흐름 / 화면과 기능 지도 / 기술 구성 / 근거와 모르는 것 / 내 버전 명세.
 
 ## 해부 화면에서 보이는 것
@@ -82,12 +84,13 @@ npx github:wonseokjung/reversebusiness https://example.com
 - 첫 페이지 한 장과 그 페이지에 걸린 가격, 약관, 환불 링크까지 최대 5장.
 - 요청 사이 2초 이상. robots.txt 의 Crawl-delay 가 더 길면 그 값을 따르고, 60초보다 길면 멈춥니다.
 - GET 만 합니다. 로그인, 가입, 결제, 폼 제출을 하지 않고, 그리로 가는 링크는 열지 않습니다.
-- 쿠키와 토큰을 저장하지도 보내지도 않습니다. 스크립트를 실행하지 않습니다.
+- 쿠키와 토큰을 저장하지도 보내지도 않습니다.
+- **그려진 화면 읽기.** 요즘 사이트는 화면을 스크립트로 그려서 받은 HTML 에 글이 거의 없는 경우가 많습니다. 받은 글이 얇으면 이 컴퓨터의 Chrome, Chromium, Edge, Brave 가운데 하나를 임시 프로필의 헤드리스 창으로 잠깐 띄워 그려진 화면을 한 번 읽습니다. 누르기, 입력, 화면 캡처는 없고, 브라우저 안에서 나가는 요청도 같은 선으로 거릅니다(GET 이 아닌 요청, robots.txt 가 막은 주소, 로그인과 결제 주소, 분석 도구는 보내지 않음). 끝나면 브라우저를 끄고 임시 프로필을 지웁니다. 해부 장면의 구역도 이때 실제 위치와 길이로 잽니다. `--no-render` 로 끌 수 있습니다.
 - 누가 읽는지 숨기지 않습니다. User-Agent 에 이름과 이 저장소 주소가 들어갑니다.
 - 401, 403, 429 나 사람 확인 화면을 만나면 넘지 않고 멈춥니다. 남은 링크도 받지 않습니다.
 - 채울 수 있는 것만 관찰로 적고, 나머지는 모름으로 둡니다. 고객, 문제, 내 버전 같은 해석은 하지 않습니다.
 
-스크립트로 그리는 페이지는 받은 HTML 에 글이 거의 없어 모름이 많이 남습니다. 그때는 에이전트와 함께 채웁니다.
+브라우저가 없으면 받은 HTML 만 읽고, 결과 끝과 화면 맨 위에 "읽은 글이 N자뿐이라 모름이 많다"와 다음에 할 일이 나옵니다. 그때는 REA 나 에이전트와 함께 채웁니다. 내 사이트를 읽을 때는 `--own` 을 붙입니다.
 
 ## 지켜야 할 선
 
@@ -118,27 +121,29 @@ CONNECT AI LAB 이 운영하는 aicitybuilders.com 의 공개 판매 페이지 �
 
 하는 일은 폴더 복사 하나입니다. 에이전트의 설정 파일은 건드리지 않습니다. 같은 이름의 다른 폴더가 있으면 건너뛰고, 지울 때는 설치 때 남긴 표식 파일이 있는 폴더만 지웁니다.
 
-| 에이전트 | 스킬이 놓이는 곳 |
-|---|---|
-| Claude Code | `~/.claude/skills/reversebusiness` |
-| Codex, Cursor, Gemini CLI | `~/.agents/skills/reversebusiness` (세 에이전트가 함께 읽는 공용 폴더에 한 벌) |
-| Antigravity | `~/.gemini/config/skills/reversebusiness` |
-| 직접 지정 | `--dir <스킬 폴더>`, 또는 `--project` (지금 폴더의 `.claude/skills`) |
+| 에이전트 | 스킬이 놓이는 곳 | 실제로 써 본 결과 (0.3.0, macOS) |
+|---|---|---|
+| Claude Code | `~/.claude/skills/reversebusiness` | 확인. 스킬을 불러와 수집, 검사, 화면까지 끝남 |
+| Codex | `~/.agents/skills/reversebusiness` | 확인. 공용 폴더에서 읽어 끝까지 끝남 |
+| Antigravity | `~/.gemini/config/skills/reversebusiness` | 스킬 인식과 내용 읽기는 확인. 도구를 돌리려면 명령 실행을 허용해야 함 (자동 실행에서는 권한이 없어 못 돌림, 대화형은 미확인) |
+| Cursor | `~/.agents/skills/reversebusiness` (Codex 와 같은 공용 폴더) | 미확인. 문서에 적힌 위치를 따름 |
+| Gemini CLI | `~/.agents/skills/reversebusiness` (같은 공용 폴더) | 미확인. 문서에 적힌 위치를 따름 |
+| 직접 지정 | `--dir <스킬 폴더>`, 또는 `--project` (지금 폴더의 `.claude/skills`) | |
 
 ## 명령 모음
 
 ```bash
 rebiz                                   # 설치 + 예시 해부 화면
-rebiz <주소>                            # 그 주소를 바로 해부 (--out <폴더>, --pages 1~5)
+rebiz <주소>                            # 그 주소를 바로 해부 (--own, --no-render, --out <폴더>, --pages 1~5)
 rebiz demo                              # 예시 해부 화면만
 rebiz view report.json --mine ./my-version   # 리포트를 해부 화면으로 (내 버전 미리보기 포함)
-rebiz check report.json                 # 리포트 검사
+rebiz check report.json                 # 리포트 검사 (해부만 했으면 --dissect-only)
 rebiz clone-check ./my-version --source source.json   # 내 버전이 원본과 겹치는지
 rebiz draft <REA 근거 JSON ...>         # REA 로 모은 근거에서 초안 만들기
 rebiz --remove                          # 지우기
 ```
 
-`rebiz` 자리에 `npx github:wonseokjung/reversebusiness` 를 쓰면 설치 없이 같은 명령이 됩니다. `source.json` 과 `requests.json` 에는 원본의 글과 요청 기록이 들어 있으므로 공개 장소에 올리지 않습니다.
+`rebiz` 자리에 `npx github:wonseokjung/reversebusiness` 를 쓰면 설치 없이 같은 명령이 됩니다. 에이전트가 채운 리포트를 고칠 때는 `report.json` 을 직접 고친 뒤 `check` 를 다시 돌립니다. `source.json` 과 `requests.json` 에는 원본의 글과 요청 기록이 들어 있으므로 공개 장소에 올리지 않습니다.
 
 ## REA 위에서 쓰는 별개의 도구
 
@@ -155,7 +160,7 @@ node --test test/            # 설치기, 수집기, 검사기 시험 (임시 HO
 node bin/rebiz.mjs --dry-run
 ```
 
-시험한 환경은 macOS, Node 20, Chrome 입니다. Windows 와 Linux 에서는 아직 시험하지 못했습니다. 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 에이전트가 읽는 안내는 [AGENTS.md](AGENTS.md), 문제 신고는 [SECURITY.md](SECURITY.md) 에 있습니다.
+시험한 환경은 macOS, Node 20, Chrome 입니다. 그려진 화면 읽기 시험은 Chrome 계열 브라우저가 없으면 건너뜁니다. Windows 와 Linux 에서는 아직 시험하지 못했습니다. 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 에이전트가 읽는 안내는 [AGENTS.md](AGENTS.md), 문제 신고는 [SECURITY.md](SECURITY.md) 에 있습니다.
 
 ## 라이선스
 
@@ -209,7 +214,7 @@ It respects the reduced motion setting and works at phone width.
 
 ## What the light collector keeps to
 
-robots.txt first, and it stops if the URL is disallowed. One page plus pricing, terms and refund links, five pages at most. Two seconds or more between requests, or the site's Crawl-delay when it is longer (it stops if that is over 60 seconds). GET only: no login, sign-up, payment or form submission, and links that lead there are not opened. No cookies or tokens are stored or sent, and no scripts are run. The User-Agent names the tool and this repository. It stops at 401, 403, 429 and human-check pages. Only what it can see is written as observed; everything else stays unknown.
+robots.txt first, and it stops if the URL is disallowed. One page plus pricing, terms and refund links, five pages at most. Two seconds or more between requests, or the site's Crawl-delay when it is longer (it stops if that is over 60 seconds). GET only: no login, sign-up, payment or form submission, and links that lead there are not opened. No cookies or tokens are stored or sent. When the received HTML is thin (most script-drawn sites), it opens the page once in a headless Chrome, Chromium, Edge or Brave with a throwaway profile and reads the drawn page: no clicks, no input, no screenshots, and requests leaving the browser are filtered by the same rules (non-GET requests, robots-disallowed URLs, login and checkout URLs and analytics are not sent). The browser is closed and the profile deleted afterwards. `--no-render` turns this off; `--own` marks the target as your own site. The User-Agent names the tool and this repository. It stops at 401, 403, 429 and human-check pages. Only what it can see is written as observed; everything else stays unknown.
 
 ## Lines we do not cross
 
@@ -232,7 +237,7 @@ One public sales page of aicitybuilders.com, run by CONNECT AI LAB, read from th
 
 ## Where the skill goes
 
-Setup only copies a folder and never edits an agent configuration file: `~/.claude/skills/reversebusiness` for Claude Code, `~/.agents/skills/reversebusiness` shared by Codex, Cursor and Gemini CLI, and `~/.gemini/config/skills/reversebusiness` for Antigravity. `--remove` deletes only folders that carry the marker file written at install time.
+Setup only copies a folder and never edits an agent configuration file: `~/.claude/skills/reversebusiness` for Claude Code, `~/.agents/skills/reversebusiness` shared by Codex, Cursor and Gemini CLI, and `~/.gemini/config/skills/reversebusiness` for Antigravity. Tried in real use on macOS: Claude Code and Codex ran end to end; Antigravity lists and reads the skill but needs command execution allowed to run the tools; Cursor and Gemini CLI are untested. `--remove` deletes only folders that carry the marker file written at install time.
 
 ## A separate tool that works on top of REA
 

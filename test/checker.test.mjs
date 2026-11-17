@@ -148,3 +148,52 @@ test('뷰어 스크립트는 리포트 글을 HTML 로 해석하지 않는다', 
   assert.match(sections, /setAttribute\('sandbox', 'allow-same-origin'\)/);
   assert.ok(!/allow-scripts/.test(sections));
 });
+
+test('해부만 검사: 내 버전 칸이 비어 있어도 통과하고, 쓰기 시작했으면 끝까지 본다', () => {
+  const blankMine = () => { const r = example(); r.sections.my_version = { working_name: '', same_problem: '', who: '', mvp: [], differences: [{ title: '', text: '' }, { title: '', text: '' }, { title: '', text: '' }], not_taken: [] }; return r; };
+  const full = checkReport(blankMine());
+  assert.ok(full.errors.some((e) => /my_version/.test(e)), '보통 검사에서는 빈 내 버전이 오류');
+  assert.equal(full.myVersion, 'empty');
+  const only = checkReport(blankMine(), { dissectOnly: true });
+  assert.deepEqual(only.errors, []);
+  assert.equal(only.myVersion, 'empty');
+  const half = blankMine();
+  half.sections.my_version.working_name = '새 이름';
+  assert.ok(checkReport(half, { dissectOnly: true }).errors.some((e) => /my_version/.test(e)), '쓰다 만 내 버전은 해부만 검사에서도 잡는다');
+  const noSection = blankMine();
+  delete noSection.sections.my_version;
+  assert.deepEqual(checkReport(noSection, { dissectOnly: true }).errors, []);
+  // 해부만 검사라도 나머지 선은 그대로
+  const bad = blankMine();
+  bad.sections.money.customer[0].evidence = [];
+  assert.match(checkReport(bad, { dissectOnly: true }).errors.join(' '), /관찰에는 근거가 1개 이상/);
+  const dir = tmp();
+  const f = path.join(dir, 'r.json');
+  fs.writeFileSync(f, JSON.stringify(blankMine()));
+  const cli = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'rebiz.mjs'), 'check', f, '--dissect-only'], { encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stdout);
+  assert.match(cli.stdout, /내 버전 칸 {2}아직 안 씀 \(해부만 검사\)/);
+  assert.match(cli.stdout, /통과 \(경고 0개\) · 해부만/);
+  assert.equal(spawnSync(process.execPath, [path.join(ROOT, 'bin', 'rebiz.mjs'), 'check', f], { encoding: 'utf8' }).status, 1);
+  const tool = spawnSync(process.execPath, [path.join(ROOT, 'skill', 'reversebusiness', 'tools', 'check-report.mjs'), f, '--dissect-only'], { encoding: 'utf8' });
+  assert.equal(tool.status, 0, tool.stdout);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('약관 상태값: robots-only 는 경고, 모르는 값은 오류', () => {
+  const r = example();
+  r.meta.terms.status = 'robots-only';
+  const a = checkReport(r);
+  assert.deepEqual(a.errors, []);
+  assert.ok(a.warnings.some((w) => /robots\.txt 까지만 확인/.test(w)));
+  assert.match(errorsOf((x) => { x.meta.terms.status = 'seen'; }), /checked \| robots-only \| not-applicable \| not-found/);
+});
+
+test('해부 화면: 얇은 결과 알림과 아직 만들지 않음 자리가 들어 있다', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'viewer', 'index.html'), 'utf8');
+  assert.match(html, /id="h-thin"/);
+  const js = fs.readFileSync(path.join(ROOT, 'viewer', 'viewer.js'), 'utf8');
+  assert.match(js, /rd && rd\.thin/);
+  assert.match(js, /아직 만들지 않음/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'viewer', 'sections.js'), 'utf8'), /no_mine_t: '아직 만들지 않음'/);
+});
