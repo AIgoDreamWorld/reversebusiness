@@ -16,7 +16,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 
-export const RENDER_LIMITS = { startMs: 12000, navMs: 15000, settleMs: 5000, idleMs: 700, growMs: 2500, maxRequests: 300, maxHeight: 12000, width: 1440, height: 900, flowClicks: 8, clickSettleMs: 1500, scriptBytes: 8_000_000 };
+export const RENDER_LIMITS = { startMs: 25000, navMs: 20000, settleMs: 5000, idleMs: 700, growMs: 2500, maxRequests: 300, maxHeight: 12000, width: 1440, height: 900, flowClicks: 8, clickSettleMs: 1500, scriptBytes: 8_000_000 };
 
 const MAC = [
   ['Google Chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'],
@@ -255,7 +255,7 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
     ...(needPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []),
     `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--disable-background-networking', '--disable-component-update',
-    '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
+    '--disable-default-apps', '--disable-dev-shm-usage', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
     ...(process.platform === 'win32' ? ['--disable-gpu'] : []),
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
   ], { env: childEnv, stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'], windowsHide: true });
@@ -323,21 +323,33 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
 // 브라우저를 띄운다. open(url, { allow }) 로 한 장을 열어 읽고, 끝나면 close() 를 꼭 부른다.
 // debugPort 를 켜면 내 컴퓨터 안(127.0.0.1)에서만 닿는 디버깅 주소도 함께 연다 (REA 가 붙어서 읽을 때 쓴다).
 export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {}, debugPort = false } = {}) {
-  const { cdp, child, profile, close, limits: L } = await launchBrowser({ browser, limits, debugPort });
-
-  let ua, endpoint = '';
-  try {
-    const v = await withTimeout(cdp.send('Browser.getVersion'), L.startMs, '브라우저 시작');
-    // 누가 읽는지 숨기지 않는다: 헤드리스 브라우저라는 것과 이 도구의 이름을 함께 밝힌다.
-    ua = `${v.userAgent} rebiz/${version}${repo ? ` (+${repo})` : ''}`;
-    try { await cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch { /* 옛 브라우저 */ }
-    if (debugPort) {
-      const file = path.join(profile, 'DevToolsActivePort');
-      for (let i = 0; i < 40 && !fs.existsSync(file); i += 1) await sleep(100);
-      const port = fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8').split('\n')[0]) : 0;
-      if (port > 0) endpoint = `http://127.0.0.1:${port}`;
+  if (!browser) throw new Error('브라우저를 찾지 못했어요');
+  let started = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let launched = null;
+    try {
+      launched = await launchBrowser({ browser, limits, debugPort });
+      const { cdp, profile, limits: L } = launched;
+      const v = await withTimeout(cdp.send('Browser.getVersion'), L.startMs, '브라우저 시작');
+      // 누가 읽는지 숨기지 않는다: 헤드리스 브라우저라는 것과 이 도구의 이름을 함께 밝힌다.
+      const ua = `${v.userAgent} rebiz/${version}${repo ? ` (+${repo})` : ''}`;
+      try { await cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch { /* 옛 브라우저 */ }
+      let endpoint = '';
+      if (debugPort) {
+        const file = path.join(profile, 'DevToolsActivePort');
+        for (let i = 0; i < 40 && !fs.existsSync(file); i += 1) await sleep(100);
+        const port = fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8').split('\n')[0]) : 0;
+        if (port > 0) endpoint = `http://127.0.0.1:${port}`;
+      }
+      started = { ...launched, ua, endpoint };
+      break;
+    } catch (e) {
+      if (launched) await launched.close();
+      if (attempt === 1) throw e;
+      await sleep(200);
     }
-  } catch (e) { await close(); throw e; }
+  }
+  const { cdp, child, profile, close, limits: L, ua, endpoint } = started;
 
   // 한 장을 연다. 돌려주는 것으로 읽고(read), 펼치고(flow), 닫는다(close).
   async function open(url, { allow = async () => ({ ok: true }), keepScripts = false } = {}) {
