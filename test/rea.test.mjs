@@ -62,28 +62,30 @@ test('REA 를 부르는 이름은 공식 npm 패키지 하나뿐이고, Node 판
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('설치: REA 가 없으면 계획에 보여 주고, 한 번의 확인으로 함께 설치한다', () => {
+test('설치: REA 가 없으면 알려 주고, 한 번의 확인을 받은 뒤에만 REA 를 부른다', () => {
   const dir = home('.claude', '.codex');
   fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), '{"keep":"me"}\n');
-  // dry-run: REA 에게 계획만 묻는다
+  // dry-run: REA 를 내려받지도 부르지도 않는다 (무엇을 할지만 알려 준다)
   let r = run(dir, ['--dry-run']);
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /REA\(원본, MIT, morluto\/rea\)도 설치합니다\. 에이전트 설정에 REA 연결을 추가합니다\./);
-  assert.match(r.out, /claude_code\s+~\/\.claude_code\.fake\.json\s+REA 연결 추가/);
-  assert.match(r.out, /REA reverse-engineering skill\s+~\/\.agents\/skills\/reverse-engineer-anything\s+REA 스킬 설치/);
-  assert.deepEqual(r.calls, [['setup', '--client', 'claude_code', '--client', 'codex', '--dry-run', '--json']]);
+  assert.match(r.out, /연결할 에이전트\s+claude_code, codex/);
+  assert.match(r.out, /확인 전에는 내려받지 않습니다/);
+  assert.deepEqual(r.calls, [], 'dry-run 은 REA 를 부르지 않는다');
   assert.ok(!fs.existsSync(path.join(dir, '.agents')), 'dry-run 은 아무것도 만들지 않는다');
-  // 사람 없는 터미널에서 --yes 가 없으면 둘 다 설치하지 않는다
+  // 사람 없는 터미널에서 --yes 가 없으면 둘 다 설치하지 않고, REA 를 부르지도 않는다
   r = run(dir, ['--no-open']);
   assert.match(r.out, /--yes 를 붙여 다시 실행하세요/);
-  assert.ok(r.calls.every((c) => c.includes('--dry-run')), '확인 전에는 계획만 묻는다');
+  assert.deepEqual(r.calls, [], '확인 전에는 REA 를 부르지 않는다');
   assert.ok(!fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness')));
-  // --yes: 우리 스킬을 먼저 깔고, 이어서 REA setup 을 부른다
+  // --yes: 우리 스킬을 먼저 깔고, REA 의 계획을 받아 보여 준 뒤 REA setup 을 부른다
   fs.rmSync(path.join(dir, 'fake-rea.log'), { force: true });
   r = run(dir, ['--yes', '--no-open']);
   assert.equal(r.status, 0, r.out);
   assert.deepEqual(r.calls, [['setup', '--client', 'claude_code', '--client', 'codex', '--dry-run', '--json'], ['setup', '--client', 'claude_code', '--client', 'codex', '--yes', '--json']]);
-  assert.match(r.out, /REA 설치 {2}에이전트 연결 2곳, REA 스킬 1곳/);
+  assert.match(r.out, /claude_code\s+~\/\.claude_code\.fake\.json\s+REA 연결 추가/);
+  assert.match(r.out, /REA reverse-engineering skill\s+~\/\.agents\/skills\/reverse-engineer-anything\s+REA 스킬 설치/);
+  assert.match(r.out, /REA 설치 {2}에이전트 연결 2곳, REA 스킬 설치/);
   assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'tools', 'rea-bridge.mjs')));
   assert.ok(fs.existsSync(path.join(dir, '.agents', 'skills', 'reverse-engineer-anything', 'SKILL.md')), '대역이 REA 스킬 자리를 만들었다');
   assert.equal(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'), '{"keep":"me"}\n', '우리 설치기는 설정 파일을 건드리지 않는다');
@@ -129,7 +131,7 @@ test('설치: --no-rea, Node 가 낮을 때, REA 가 이미 있을 때, REA 계�
   dir = home('.claude');
   r = run(dir, ['--yes', '--no-open'], { FAKE_REA_FAIL: 'setup' });
   assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /REA 는 건너뜁니다\. REA 의 설치 계획을 받지 못했습니다/);
+  assert.match(r.out, /REA 는 건너뜁니다\s+REA 의 설치 계획을 받지 못했습니다/);
   assert.equal(r.calls.length, 1);
   assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'SKILL.md')));
   fs.rmSync(dir, { recursive: true, force: true });

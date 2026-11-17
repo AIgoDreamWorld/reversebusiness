@@ -170,7 +170,7 @@ function parseJson(text) {
   try { return JSON.parse(String(text).slice(i)); } catch { return null; }
 }
 const REA_HOW = `npx -y ${REA_PACKAGE}@latest setup`;
-// REA 를 함께 설치할지 정하고, 설치한다면 REA 가 스스로 낸 계획(dry-run)을 받아 온다. 아무것도 바꾸지 않는다.
+// REA 를 함께 설치할지 정한다. 여기서는 아무것도 내려받지 않고 아무것도 바꾸지 않는다 (확인을 받은 뒤에만 REA 를 부른다).
 async function planRea(o, targets) {
   if (o.noRea) return { state: 'skip', line: 'REA 는 설치하지 않습니다 (--no-rea). 가벼운 모드로 동작합니다.' };
   const st = await reaState();
@@ -178,31 +178,37 @@ async function planRea(o, targets) {
   if (st.state === 'node-too-old') return { state: 'node-too-old', line: `REA 는 건너뜁니다. REA 는 ${REA_NODE}이 필요한데 지금 Node 는 ${currentNode()} 입니다. Node 를 올린 뒤 ${REA_HOW} 을 실행하면 정밀 모드가 켜집니다. 그때까지는 가벼운 모드로 동작합니다.` };
   const clients = [...new Set(targets.flatMap((t) => t.keys || []).map((k) => REA_CLIENTS[k]).filter(Boolean))];
   if (!clients.length) return { state: 'no-client', line: `REA 는 건너뜁니다. REA 를 연결할 에이전트를 고르지 않았습니다. 나중에: ${REA_HOW}` };
-  const installer = reaInstaller();
-  say(T.dim(`REA 의 설치 계획을 받아 오는 중입니다 (npm 의 공식 패키지 ${REA_PACKAGE} 에게 계획만 묻습니다. 아직 아무것도 바꾸지 않습니다)`));
-  const args = ['setup', ...clients.flatMap((c) => ['--client', c])];
-  const r = await runRea(installer, [...args, '--dry-run', '--json'], { timeoutMs: 180000 });
-  const j = r.code === 0 ? parseJson(r.stdout) : null;
-  if (!j || j.status !== 'planned' || !Array.isArray(j.plannedActions)) return { state: 'plan-failed', line: `REA 는 건너뜁니다. REA 의 설치 계획을 받지 못했습니다${r.timedOut ? ' (시간 초과)' : ''}. 나중에: ${REA_HOW}` };
-  return { state: 'install', installer, args, clients, actions: j.plannedActions };
+  return { state: 'install', installer: reaInstaller(), args: ['setup', ...clients.flatMap((c) => ['--client', c])], clients };
 }
 const REA_ACT = { configure_client: 'REA 연결 추가', install_skill: 'REA 스킬 설치' };
 function showReaPlan(rp) {
   say(T.dim(`REA (원본 ${REA_REPO.replace('https://', '')}, MIT, 별개의 도구)`));
   if (rp.state !== 'install') { say(`  ${rp.state === 'present' ? T.ivory(rp.line) : T.dim(rp.line)}`); return; }
   say(`  ${T.ivory('REA(원본, MIT, morluto/rea)도 설치합니다. 에이전트 설정에 REA 연결을 추가합니다.')}`);
-  const w = Math.max(...rp.actions.map((a) => T.width(String(a.label || a.kind)))) + 2;
-  for (const a of rp.actions) say(`  ${T.pad(String(a.label || a.kind), w)}${tilde(String(a.target || ''))}  ${T.gold(REA_ACT[a.kind] || String(a.kind))}`);
-  say(T.dim(`  설정 파일을 바꾸는 것은 REA 의 setup 이며, 바꾸기 전에 REA 가 백업을 남깁니다. 건너뛰려면 --no-rea`));
+  say(`  ${T.pad('연결할 에이전트', 18)}${rp.clients.join(', ')}  ${T.gold('REA 연결 추가, REA 스킬 설치')}`);
+  say(T.dim(`  확인하면 npm 의 공식 패키지 ${REA_PACKAGE} 를 내려받아 REA 의 setup 을 실행합니다. 확인 전에는 내려받지 않습니다.`));
+  say(T.dim(`  설정 파일을 바꾸는 것은 REA 의 setup 이며, 바꾸기 전에 REA 가 백업을 남깁니다. 미리 자세히 보려면: ${REA_HOW} --dry-run`));
+  say(T.dim('  건너뛰려면 --no-rea'));
 }
+// 확인을 받은 뒤에만 부른다: REA 가 스스로 낸 계획(dry-run)을 먼저 받아 보여 주고, 이어서 설치한다.
 async function applyRea(rp) {
+  say(T.dim(`REA 의 설치 계획을 받아 오는 중입니다 (npm 의 공식 패키지 ${REA_PACKAGE})`));
+  const p = await runRea(rp.installer, [...rp.args, '--dry-run', '--json'], { timeoutMs: 180000 });
+  const pj = p.code === 0 ? parseJson(p.stdout) : null;
+  if (!pj || pj.status !== 'planned' || !Array.isArray(pj.plannedActions)) { say(`  ${T.gold('REA 는 건너뜁니다')}  REA 의 설치 계획을 받지 못했습니다${p.timedOut ? ' (시간 초과)' : ''}. 우리 스킬은 그대로 쓸 수 있고 가벼운 모드로 동작합니다. 나중에: ${REA_HOW}`); return false; }
+  if (pj.plannedActions.length) {
+    const w = Math.max(...pj.plannedActions.map((a) => T.width(String(a.label || a.kind)))) + 2;
+    for (const a of pj.plannedActions) say(`  ${T.pad(String(a.label || a.kind), w)}${tilde(String(a.target || ''))}  ${T.gold(REA_ACT[a.kind] || String(a.kind))}`);
+  }
   say(T.dim(`REA 를 설치하는 중입니다 (${REA_PACKAGE} setup)`));
   const r = await runRea(rp.installer, [...rp.args, '--yes', '--json'], { timeoutMs: 600000 });
   const j = parseJson(r.stdout);
   if (r.code !== 0 || !j) { say(`  ${T.gold('REA 설치 실패')}  ${r.timedOut ? '시간 초과' : 'REA setup 이 끝나지 않았습니다'}. 우리 스킬은 그대로 쓸 수 있고 가벼운 모드로 동작합니다. 나중에: ${REA_HOW}`); return false; }
-  const applied = Array.isArray(j.appliedActions) ? j.appliedActions : [];
-  const n = (kind) => applied.filter((a) => a.kind === kind).length;
-  say(`  ${T.gold('REA 설치')}  에이전트 연결 ${n('configure_client')}곳, REA 스킬 ${n('install_skill')}곳${j.status ? T.dim(`  (${j.status})`) : ''}`);
+  // REA 는 한 일을 "configured_<에이전트>", "installed_skill" 같은 이름으로 돌려준다 (옛 모양인 { kind } 도 읽는다).
+  const applied = (Array.isArray(j.appliedActions) ? j.appliedActions : []).map((a) => (typeof a === 'string' ? a : String((a && (a.kind || a.id)) || '')));
+  const nc = applied.filter((a) => /^configure/.test(a)).length;
+  const ns = applied.some((a) => /^install(ed)?_skill/.test(a));
+  say(`  ${T.gold('REA 설치')}  에이전트 연결 ${nc}곳${ns ? ', REA 스킬 설치' : ''}${j.status ? T.dim(`  (${j.status})`) : ''}`);
   return true;
 }
 

@@ -21,7 +21,7 @@ CONNECT AI LAB 오픈소스 1호. 의존성 0, Node 18 이상 (REA 까지 쓰려
 
 ## 30초 따라 하기
 
-1. 터미널에 위의 한 줄을 넣습니다. 이 컴퓨터의 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 바뀔 것을 보여 주고, 한 번 확인받은 뒤 reversebusiness 스킬을 설치합니다. REA 가 없으면 REA 도 함께 설치합니다 (REA 의 공식 npm 패키지 `rea-agents` 의 setup 을 부릅니다. REA 가 스스로 낸 계획을 먼저 보여 줍니다).
+1. 터미널에 위의 한 줄을 넣습니다. 이 컴퓨터의 에이전트(Claude Code, Codex, Gemini CLI, Cursor, Antigravity)를 찾아 바뀔 것을 보여 주고, 한 번 확인받은 뒤 reversebusiness 스킬을 설치합니다. REA 가 없으면 REA 도 함께 설치합니다 (확인을 받은 뒤에만 REA 의 공식 npm 패키지 `rea-agents` 를 내려받아 setup 을 부릅니다. 확인 전에는 아무것도 내려받지 않습니다).
 2. 끝나자마자 브라우저에 해부 화면이 열리고 예시 해부가 재생됩니다.
 3. 에이전트를 새로 시작하고 이렇게 말합니다.
 

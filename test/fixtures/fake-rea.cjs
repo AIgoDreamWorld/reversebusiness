@@ -19,7 +19,7 @@ if (cmd === 'setup') {
   if (args.includes('--dry-run')) { out({ status: 'planned', plannedActions: actions, appliedActions: [] }); process.exit(0); }
   if (!args.includes('--yes')) { out({ status: 'needs_confirmation', plannedActions: actions, appliedActions: [] }); process.exit(1); }
   for (const a of actions) { fs.mkdirSync(a.kind === 'install_skill' ? a.target : path.dirname(a.target), { recursive: true }); fs.writeFileSync(a.kind === 'install_skill' ? path.join(a.target, 'SKILL.md') : a.target, 'fake rea\n'); }
-  out({ status: 'applied', plannedActions: [], appliedActions: actions });
+  out({ status: 'ready', plannedActions: actions, appliedActions: clients.map((c) => `configured_${c}`).concat(['installed_skill']) }); // 진짜 REA 6.9.0 이 내는 모양
   process.exit(0);
 }
 if (cmd === 'inspect-web-page' || cmd === 'analyze-web-bundle') {
