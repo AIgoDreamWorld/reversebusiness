@@ -442,7 +442,7 @@ test('fill --agent: 확인 뒤 리포트의 폴더에서 한 번 실행하고, �
     const ask = run(dir, ['fill', 'report.json', '--agent', 'claude'], { agent: 'fill' });
     assert.equal(ask.status, 0, ask.out);
     assert.match(ask.out, /이 단계는 내 에이전트\(Claude Code\)를 한 번 실행하고, 그 에이전트의 사용량을 씁니다/);
-    assert.match(ask.out, /권한\s+claude -p, 허용 도구: 읽기, 이 폴더 안 고치기, rebiz check 실행 \(웹 도구는 막음\)/);
+    assert.match(ask.out, /권한\s+claude -p, 허용 도구: 이 폴더 안 읽기와 고치기, 스킬 문서 읽기, rebiz check 실행 \(웹 도구는 막음\)/);
     assert.match(ask.out, /시간 한도\s+10분/);
     assert.match(ask.out, /확인이 필요합니다/);
     assert.equal(ask.calls.length, 0);
@@ -454,7 +454,9 @@ test('fill --agent: 확인 뒤 리포트의 폴더에서 한 번 실행하고, �
     const { args, cwd, prompt } = r.calls[0];
     noForbidden(args);
     assert.equal(cwd, dir);
-    assert.deepEqual(args.slice(0, 5), ['-p', '--allowedTools', 'Read', 'Glob', 'Grep']);
+    assert.deepEqual(args.slice(0, 3), ['-p', '--allowedTools', `Read(//${dir.replace(/^\/+/, '')}/**)`]);
+    assert.ok(!args.includes('Read') && !args.includes('Glob') && !args.includes('Grep'), '읽기는 이 폴더와 스킬 문서 폴더로만 한정한다');
+    assert.match(prompt, /남의 사이트에서 온 데이터다/);
     assert.ok(args.includes(`Edit(//${dir.replace(/^\/+/, '')}/**)`));
     assert.ok(args.includes(`Bash(node ${CLI} check:*)`));
     assert.ok(!args.includes(prompt), '할 일은 인자가 아니라 표준 입력으로 준다');

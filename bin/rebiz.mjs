@@ -450,7 +450,7 @@ async function delegate(o, name, { what, dir, prompt, check = false, minutes, re
   if (ready) { const why = ready(); if (why) { rowG('멈춤', `${why}`); return 'failed'; } }
   say(T.dim(`${a.label} 를 실행합니다. 두 줄 사이는 에이전트의 출력입니다.`));
   T.rule();
-  const r = await runAgent(name, runner, { dir, prompt, minutes: mins, checkCli: check ? CLI : '' });
+  const r = await runAgent(name, runner, { dir, prompt, minutes: mins, checkCli: check ? CLI : '', readDirs: fs.existsSync(SKILL_MD) ? [path.dirname(SKILL_MD)] : [] });
   T.rule();
   if (r.refused) { rowG('실행하지 않음', `권한 확인을 건너뛰는 옵션이 섞여 있어 에이전트를 부르지 않았습니다.`); return 'failed'; }
   if (r.timedOut) { rowG('시간 초과', `${mins}분을 넘어 에이전트를 껐습니다. 더 길게: --timeout <분>`); return 'timeout'; }
