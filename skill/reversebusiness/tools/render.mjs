@@ -240,7 +240,13 @@ const CLICK = (i) => `(() => { const p = (window.__rebizPicks || [])[${i}]; if (
 export async function launchBrowser({ browser = findBrowser(), limits = {}, debugPort = false, args = [] } = {}) {
   if (!browser) throw new Error('브라우저를 찾지 못했어요');
   const L = { ...RENDER_LIMITS, ...limits };
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-render-'));
+  const rawProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-render-'));
+  const profile = process.platform === 'win32' ? (fs.realpathSync.native ? fs.realpathSync.native(rawProfile) : fs.realpathSync(rawProfile)) : rawProfile;
+  const childEnv = { ...process.env };
+  if (process.platform === 'win32' && childEnv.LOCALAPPDATA && /[\\/]AppData[\\/]Local$/i.test(childEnv.LOCALAPPDATA)) {
+    // 테스트 등에서 USERPROFILE 만 임시 폴더로 바꿨을 때 Chrome 136+ 의 기본 데이터 폴더 검증이 실패하지 않게 맞춘다 (프로필은 --user-data-dir 로 격리됨).
+    childEnv.USERPROFILE = path.resolve(childEnv.LOCALAPPDATA, '..', '..');
+  }
   const usePipe = process.platform !== 'win32';
   const needPort = !usePipe || debugPort;
   const child = spawn(browser.path, [
@@ -252,7 +258,7 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
     '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
     ...(process.platform === 'win32' ? ['--disable-gpu'] : []),
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
-  ], { stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  ], { env: childEnv, stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let exited = false, exitCode = null, errLog = '';
   if (!usePipe && child.stderr) {
     child.stderr.setEncoding('utf8');
