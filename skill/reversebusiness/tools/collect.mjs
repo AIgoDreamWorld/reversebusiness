@@ -115,6 +115,17 @@ const LINK_KINDS = [
   { kind: 'refund', re: /(refund|환불|취소\s?정책|cancellation)/i },
 ];
 
+// 약관 링크로 보고 연 페이지가 정말 약관인지 본다: 주소나 제목이 약관을 가리키거나, 본문에 약관에서 쓰는 말이 여럿 있어야 한다.
+// 약관이 아닌 글을 약관으로 읽으면 "금지하는 말이 없다"고 잘못 판단해 속 읽기를 하게 되므로 엄격하게 본다.
+const TERMS_WHERE = /(terms|\btos\b|legal|conditions|agreement|약관)/i;
+const TERMS_WORDS = [/terms of (service|use)|terms and conditions|이용\s?약관|서비스\s?약관/i, /liabilit|면책|책임을 지지/i, /governing law|jurisdiction|준거법|관할/i, /terminat|계약의? 해지|이용 계약/i, /warrant|보증하지/i, /intellectual property|지식재산|저작권/i, /you agree|동의한 것으로|동의합니다/i];
+export function looksLikeTerms(pg) {
+  let where = String((pg && pg.title) || '');
+  try { where += ` ${decodeURIComponent(new URL(pg.url).pathname)}`; } catch { /* 주소를 못 읽으면 제목만 본다 */ }
+  const text = ((pg && pg.lines) || []).join(' ');
+  return TERMS_WHERE.test(where) || TERMS_WORDS.filter((re) => re.test(text)).length >= 4;
+}
+
 export function createFetcher({ version = '0', fetchImpl = globalThis.fetch, sleep = realSleep, now = () => Date.now(), limits = {} } = {}) {
   const L = { ...LIMITS, ...limits };
   const log = [];
@@ -594,7 +605,9 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
     const picked = [];
     const mainPath = new URL(main.url).pathname;
     for (const { kind, re } of LINK_KINDS) {
-      const cand = main.links.find((l) => l.same && l.href && l.path !== mainPath && !picked.some((x) => x.path === l.path) && !neverOpen(l.path) && !/\.(pdf|zip|png|jpe?g|mp4|docx?)$/i.test(l.path) && (re.test(l.text) || re.test(l.path)));
+      const ok = (l) => l.same && l.href && l.path !== mainPath && !picked.some((x) => x.path === l.path) && !neverOpen(l.path) && !/\.(pdf|zip|png|jpe?g|mp4|docx?)$/i.test(l.path);
+      // 주소가 맞는 링크를 먼저 고르고, 없을 때만 링크 글자로 고른다 (글자만 보면 엉뚱한 소개 페이지가 잡힌다).
+      const cand = main.links.find((l) => ok(l) && re.test(l.path)) || main.links.find((l) => ok(l) && re.test(l.text));
       if (cand) picked.push({ ...cand, kind });
     }
     for (const l of picked) {
@@ -602,7 +615,10 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
       if (useBrowser && (now || Date.now)() - renderStarted > f.limits.renderBudgetMs) { result.skipped.push({ url: cleanUrl(l.href), why: '그려 읽는 시간 한도' }); continue; }
       try {
         // 첫 페이지를 그려서 읽었다면 같은 사이트의 다음 장도 그려서 읽는다 (한 장에 한 번만 연다).
-        result.pages.push(useBrowser ? await rendered(new URL(l.href), l.kind) : await page(new URL(l.href), l.kind));
+        const pg = useBrowser ? await rendered(new URL(l.href), l.kind) : await page(new URL(l.href), l.kind);
+        // 약관 링크로 보고 열었는데 약관이 아니면 약관으로 치지 않는다 (약관을 못 읽은 것으로 남는다).
+        if (l.kind === 'terms' && !looksLikeTerms(pg)) pg.kind = 'other';
+        result.pages.push(pg);
       } catch (e) {
         if (!(e instanceof Stop)) throw e;
         result.skipped.push({ url: cleanUrl(l.href), why: e.message });
@@ -632,7 +648,7 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
 }
 
 // ---------- 초안 만들기 ----------
-const PAGE_LABEL = { main: '첫 페이지', pricing: '가격 페이지', terms: '이용약관', refund: '환불 정책' };
+const PAGE_LABEL = { main: '첫 페이지', pricing: '가격 페이지', terms: '이용약관', refund: '환불 정책', other: '그 밖의 페이지' };
 export function buildDraftFromPages(c, { relation = 'third-party', today = new Date().toISOString().slice(0, 10), version = '0' } = {}) {
   const main = c.pages[0];
   if (!main) throw new Error('읽은 페이지가 없어요');
