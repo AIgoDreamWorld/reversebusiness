@@ -252,10 +252,14 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
     '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
     ...(process.platform === 'win32' ? ['--disable-gpu'] : []),
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
-  ], { stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : 'ignore', windowsHide: true });
-  let exited = false;
-  child.on('exit', () => { exited = true; });
-  child.on('error', () => { exited = true; });
+  ], { stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  let exited = false, exitCode = null, errLog = '';
+  if (!usePipe && child.stderr) {
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (d) => { errLog = (errLog + d).slice(-4000); });
+  }
+  child.on('exit', (code) => { exited = true; exitCode = code; });
+  child.on('error', (e) => { exited = true; errLog += ` ${e && e.message}`; });
   const killTree = () => {
     if (process.platform === 'win32' && child.pid) {
       try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { /* 이미 끝남 */ }
@@ -274,6 +278,7 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
       if (!exited) { killTree(); for (let i = 0; i < 20 && !exited; i += 1) await sleep(100); }
     }
     if (cdp) cdp.close();
+    try { child.stderr?.destroy(); } catch { /* 이미 닫힘 */ }
     if (usePipe) try { child.stdio[3]?.destroy(); child.stdio[4]?.destroy(); } catch { /* 이미 닫힘 */ }
     try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 }); } catch { /* 임시 폴더는 운영체제가 지운다 */ }
     return { exited, profileRemoved: !fs.existsSync(profile) };
@@ -284,17 +289,20 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
       cdp = cdpPipe(child);
     } else {
       const portFile = path.join(profile, 'DevToolsActivePort');
-      let lines = [];
+      let port = 0, wsPath = '';
       const deadline = Date.now() + L.startMs;
-      while (Date.now() < deadline && !exited) {
+      while (Date.now() < deadline) {
+        const m = /DevTools listening on ws:\/\/(?:127\.0\.0\.1|localhost):(\d+)(\/devtools\/\S+)/i.exec(errLog);
+        if (m) { port = Number(m[1]); wsPath = m[2]; break; }
         if (fs.existsSync(portFile)) {
-          lines = fs.readFileSync(portFile, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-          if (lines.length >= 2 && Number(lines[0]) > 0) break;
+          const lines = fs.readFileSync(portFile, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+          if (lines.length >= 2 && Number(lines[0]) > 0) { port = Number(lines[0]); wsPath = lines[1]; break; }
         }
+        if (exited) break;
         await sleep(50);
       }
-      if (lines.length < 2 || !(Number(lines[0]) > 0)) throw new Error('브라우저 디버깅 포트를 찾지 못했어요');
-      cdp = await connectCdpWs(Number(lines[0]), lines[1], L.startMs);
+      if (!(port > 0) || !wsPath) throw new Error(`브라우저 디버깅 포트를 찾지 못했어요 (code=${exitCode}): ${errLog.trim()}`);
+      cdp = await connectCdpWs(port, wsPath, L.startMs);
     }
   } catch (e) { await close(); throw e; }
 
