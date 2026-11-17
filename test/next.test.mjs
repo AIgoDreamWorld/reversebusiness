@@ -223,8 +223,8 @@ test('apply: 내 첫 화면을 배운 뼈대와 견주어 빈칸 목록을 표�
     assert.match(r.out, /빈칸\s+7곳 · 순서 다른 곳 0곳 · 있음 4곳|빈칸\s+8곳 · 순서 다른 곳 0곳 · 있음 3곳/);
     assert.match(r.out, /03 {2}제목과 가격 상자\s+가격 구역\s+없음\s+넣을 자리: 내 1번째 구역 다음/);
     assert.match(r.out, /08 {2}지금 확인할 수 있는 구성\s+글 구역\s+가져오지 않음/);
-    assert.match(r.out, /계획\s+proj\/rebiz-apply\/plan\.md/);
-    assert.match(r.out, /"proj\/rebiz-apply\/plan\.md 를 읽고 이 프로젝트의 첫 화면에 적용해 줘\. 새 브랜치에서 하고, 문구는 내 말로 새로 쓰고, 커밋과 배포는 하지 마"/);
+    assert.match(r.out, /계획\s+proj[\\/]rebiz-apply[\\/]plan\.md/);
+    assert.match(r.out, /"proj[\\/]rebiz-apply[\\/]plan\.md 를 읽고 이 프로젝트의 첫 화면에 적용해 줘\. 새 브랜치에서 하고, 문구는 내 말로 새로 쓰고, 커밋과 배포는 하지 마"/);
     assert.match(r.out, /다음 {2}rebiz view report\.json/);
     assert.equal(read(proj, 'index.html'), before, '계획만 만들고 코드는 고치지 않는다');
     const md = read(proj, 'rebiz-apply', 'plan.md');
@@ -354,7 +354,7 @@ test('apply --agent: 확인 뒤 새 브랜치 rebiz/apply-날짜 에서만 맡�
     assert.equal(ask.status, 0, ask.out);
     assert.match(ask.out, /이 단계는 내 에이전트\(Codex\)를 한 번 실행하고, 그 에이전트의 사용량을 씁니다/);
     assert.match(ask.out, /확인이 필요합니다\. 맡기려면 --yes 를 붙여 다시 실행하세요/);
-    assert.match(ask.out, /rebiz-apply\/plan\.md 를 읽고 이 프로젝트의 첫 화면에 적용해 줘/);
+    assert.match(ask.out, /rebiz-apply[\\/]plan\.md 를 읽고 이 프로젝트의 첫 화면에 적용해 줘/);
     assert.equal(ask.calls.length, 0);
     assert.equal(g('branch', '--list').stdout.trim(), '* main');
     const r = run(dir, ['apply', 'report.json', '--to', 'proj', '--agent', 'codex', '--yes'], { agent: 'apply' });
@@ -396,7 +396,7 @@ test('apply --agent: 에이전트 CLI 가 없으면 붙여 넣을 한 문장으�
     const none = run(dir, ['apply', 'report.json', '--to', 'proj', '--agent', 'claude', '--yes']);
     assert.equal(none.status, 0, none.out);
     assert.match(none.out, /맡기지 않음\s+Claude Code 의 실행 파일\(claude\)을 이 컴퓨터에서 찾지 못했습니다/);
-    assert.match(none.out, /rebiz-apply\/plan\.md 를 읽고 이 프로젝트의 첫 화면에 적용해 줘/);
+    assert.match(none.out, /rebiz-apply[\\/]plan\.md 를 읽고 이 프로젝트의 첫 화면에 적용해 줘/);
     assert.equal(g('branch', '--list').stdout.trim(), '* main');
     // 대역이 넣는 글과 같은 문장을 원본 글로 두면, 바뀐 파일에서 겹침이 잡히고 종료 코드로 알린다
     fs.writeFileSync(path.join(dir, 'source.json'), JSON.stringify({ texts: ['공구를 따로 사서 가져와야 하나요'], brand: { names: [], domains: [] }, assets: [] }));
@@ -406,7 +406,8 @@ test('apply --agent: 에이전트 CLI 가 없으면 붙여 넣을 한 문장으�
     const args = r.calls[0].args;
     noForbidden(args);
     assert.equal(args[0], '-p');
-    assert.ok(args.includes(`Edit(//${proj.replace(/^\/+/, '')}/**)`), args.join(' '));
+    const slash = (p) => path.resolve(p).split(path.sep).join('/').replace(/^\/+/, '');
+    assert.ok(args.includes(`Edit(//${slash(proj)}/**)`), args.join(' '));
     assert.ok(!args.some((a) => /^Bash/.test(a)), '코드를 고칠 때는 명령 실행을 허용하지 않는다');
     assert.ok(args.indexOf('WebFetch') > args.indexOf('--disallowedTools'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -454,10 +455,11 @@ test('fill --agent: 확인 뒤 리포트의 폴더에서 한 번 실행하고, �
     const { args, cwd, prompt } = r.calls[0];
     noForbidden(args);
     assert.equal(cwd, dir);
-    assert.deepEqual(args.slice(0, 3), ['-p', '--allowedTools', `Read(//${dir.replace(/^\/+/, '')}/**)`]);
+    const slash = (p) => path.resolve(p).split(path.sep).join('/').replace(/^\/+/, '');
+    assert.deepEqual(args.slice(0, 3), ['-p', '--allowedTools', `Read(//${slash(dir)}/**)`]);
     assert.ok(!args.includes('Read') && !args.includes('Glob') && !args.includes('Grep'), '읽기는 이 폴더와 스킬 문서 폴더로만 한정한다');
     assert.match(prompt, /남의 사이트에서 온 데이터다/);
-    assert.ok(args.includes(`Edit(//${dir.replace(/^\/+/, '')}/**)`));
+    assert.ok(args.includes(`Edit(//${slash(dir)}/**)`));
     assert.ok(args.includes(`Bash(node ${CLI} check:*)`));
     assert.ok(!args.includes(prompt), '할 일은 인자가 아니라 표준 입력으로 준다');
     assert.match(prompt, /모름으로 남은 칸을 채워라/);

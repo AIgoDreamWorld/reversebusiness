@@ -1,5 +1,5 @@
 // 그려진 화면 읽기: 이 컴퓨터의 Chrome 계열 브라우저를 임시 프로필로 잠깐 띄워, 스크립트가 그린 뒤의 화면을 읽는다.
-// 의존성 없음. 브라우저와는 파이프(--remote-debugging-pipe)로만 말한다. 포트를 열지 않는다.
+// 의존성 없음. macOS/Linux 에서는 파이프(--remote-debugging-pipe)로, Windows 에서는 127.0.0.1 루프백 웹소켓으로만 말한다.
 //
 // 지키는 것:
 //   - 임시 프로필만 쓴다. 평소 브라우저의 쿠키, 로그인, 확장 프로그램을 쓰지 않는다. 끝나면 브라우저를 끄고 임시 폴더를 지운다.
@@ -10,8 +10,10 @@
 //   - 쿠키를 돌려보내지 않는다 (요청을 내보내기 직전마다 쿠키를 비우고, 페이지 스크립트의 쿠키 쓰기를 끈다).
 //   - 저장소의 값을 읽지 않는다. 읽는 것은 그려진 화면의 글자, 구조, 구역의 위치와 크기뿐이다.
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 
 export const RENDER_LIMITS = { startMs: 12000, navMs: 15000, settleMs: 5000, idleMs: 700, growMs: 2500, maxRequests: 300, maxHeight: 12000, width: 1440, height: 900, flowClicks: 8, clickSettleMs: 1500, scriptBytes: 8_000_000 };
@@ -117,6 +119,94 @@ function cdpPipe(child) {
   };
 }
 
+// Windows 등 파이프를 못 쓰는 환경에서 127.0.0.1 루프백 웹소켓으로만 CDP 통신을 연다. 의존성 없음.
+export function connectCdpWs(port, wsPath, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    let seq = 0, closed = false, upgraded = false, buf = Buffer.alloc(0), frag = [];
+    const pending = new Map();
+    const handlers = new Set();
+    const sock = net.connect(port, '127.0.0.1');
+    const timer = setTimeout(() => { sock.destroy(); reject(new Error('브라우저 WebSocket 시간 초과')); }, timeoutMs);
+    const fail = () => {
+      if (closed) return;
+      closed = true;
+      for (const p of pending.values()) p.no(new Error('browser closed'));
+      pending.clear();
+      sock.destroy();
+    };
+    const sendFrame = (opcode, data) => {
+      const payload = Buffer.isBuffer(data) ? data : Buffer.from(String(data), 'utf8');
+      const mask = randomBytes(4);
+      const len = payload.length;
+      const hdr = len < 126 ? Buffer.alloc(6) : len < 65536 ? Buffer.alloc(8) : Buffer.alloc(14);
+      hdr[0] = 0x80 | opcode;
+      let off = 2;
+      if (len < 126) hdr[1] = 0x80 | len;
+      else if (len < 65536) { hdr[1] = 0x80 | 126; hdr.writeUInt16BE(len, 2); off = 4; }
+      else { hdr[1] = 0x80 | 127; hdr.writeBigUInt64BE(BigInt(len), 2); off = 10; }
+      mask.copy(hdr, off);
+      const masked = Buffer.allocUnsafe(len);
+      for (let i = 0; i < len; i += 1) masked[i] = payload[i] ^ mask[i & 3];
+      sock.write(Buffer.concat([hdr, masked]));
+    };
+    const drain = () => {
+      while (buf.length >= 2) {
+        const b0 = buf[0], b1 = buf[1], fin = (b0 & 0x80) !== 0, opcode = b0 & 0x0f;
+        let len = b1 & 0x7f, off = 2;
+        if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; }
+        else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+        const maskOff = (b1 & 0x80) ? 4 : 0;
+        if (buf.length < off + maskOff + len) return;
+        let body = buf.subarray(off + maskOff, off + maskOff + len);
+        if (maskOff) { const m = buf.subarray(off, off + 4); body = Buffer.from(body); for (let i = 0; i < len; i += 1) body[i] ^= m[i & 3]; }
+        buf = buf.subarray(off + maskOff + len);
+        if (opcode === 0x8) { fail(); return; }
+        if (opcode === 0x9) { sendFrame(0xA, body); continue; }
+        if (opcode === 0xA) continue;
+        frag.push(body);
+        if (!fin) continue;
+        const raw = Buffer.concat(frag).toString('utf8');
+        frag = [];
+        let m;
+        try { m = JSON.parse(raw); } catch { continue; }
+        if (m.id && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); if (m.error) p.no(new Error(m.error.message)); else p.ok(m.result); }
+        else for (const h of handlers) h(m);
+      }
+    };
+    sock.on('error', (e) => { clearTimeout(timer); if (!upgraded) reject(e); fail(); });
+    sock.on('close', () => { clearTimeout(timer); if (!upgraded) reject(new Error('browser closed')); fail(); });
+    sock.on('connect', () => {
+      const key = randomBytes(16).toString('base64');
+      sock.write(`GET ${wsPath} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+    });
+    sock.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (!upgraded) {
+        const idx = buf.indexOf('\r\n\r\n');
+        if (idx < 0) return;
+        const head = buf.subarray(0, idx).toString('utf8');
+        if (!/^HTTP\/1\.1 101\b/i.test(head)) { clearTimeout(timer); sock.destroy(); reject(new Error('WebSocket 연결 실패')); return; }
+        upgraded = true;
+        clearTimeout(timer);
+        buf = buf.subarray(idx + 4);
+        resolve({
+          send(method, params = {}, sessionId) {
+            if (closed) return Promise.reject(new Error('browser closed'));
+            return new Promise((ok, no) => {
+              const id = ++seq;
+              pending.set(id, { ok, no });
+              try { sendFrame(0x1, JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); } catch (e) { pending.delete(id); no(e); }
+            });
+          },
+          on(fn) { handlers.add(fn); return () => handlers.delete(fn); },
+          close: fail,
+        });
+      }
+      drain();
+    });
+  });
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what} 시간 초과`)), ms))]);
 
@@ -151,13 +241,18 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
   if (!browser) throw new Error('브라우저를 찾지 못했어요');
   const L = { ...RENDER_LIMITS, ...limits };
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-render-'));
+  const usePipe = process.platform !== 'win32';
+  const needPort = !usePipe || debugPort;
   const child = spawn(browser.path, [
-    '--headless=new', '--remote-debugging-pipe', ...(debugPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []), `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
+    '--headless=new',
+    ...(usePipe ? ['--remote-debugging-pipe'] : []),
+    ...(needPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []),
+    `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--disable-background-networking', '--disable-component-update',
     '--disable-default-apps', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
     ...(process.platform === 'win32' ? ['--disable-gpu'] : []),
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: true });
+  ], { stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : 'ignore', windowsHide: true });
   let exited = false;
   child.on('exit', () => { exited = true; });
   child.on('error', () => { exited = true; });
@@ -169,20 +264,40 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
   };
   const onExit = () => killTree();
   process.on('exit', onExit);
-  const cdp = cdpPipe(child);
+  let cdp = null;
 
   async function close() {
     process.removeListener('exit', onExit);
     if (!exited) {
-      try { await withTimeout(cdp.send('Browser.close'), 2000, '끄기'); } catch { /* 아래에서 끈다 */ }
+      if (cdp) try { await withTimeout(cdp.send('Browser.close'), 2000, '끄기'); } catch { /* 아래에서 끈다 */ }
       for (let i = 0; i < 20 && !exited; i += 1) await sleep(100);
       if (!exited) { killTree(); for (let i = 0; i < 20 && !exited; i += 1) await sleep(100); }
     }
-    cdp.close();
-    try { child.stdio[3]?.destroy(); child.stdio[4]?.destroy(); } catch { /* 이미 닫힘 */ }
+    if (cdp) cdp.close();
+    if (usePipe) try { child.stdio[3]?.destroy(); child.stdio[4]?.destroy(); } catch { /* 이미 닫힘 */ }
     try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 }); } catch { /* 임시 폴더는 운영체제가 지운다 */ }
     return { exited, profileRemoved: !fs.existsSync(profile) };
   }
+
+  try {
+    if (usePipe) {
+      cdp = cdpPipe(child);
+    } else {
+      const portFile = path.join(profile, 'DevToolsActivePort');
+      let lines = [];
+      const deadline = Date.now() + L.startMs;
+      while (Date.now() < deadline && !exited) {
+        if (fs.existsSync(portFile)) {
+          lines = fs.readFileSync(portFile, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+          if (lines.length >= 2 && Number(lines[0]) > 0) break;
+        }
+        await sleep(50);
+      }
+      if (lines.length < 2 || !(Number(lines[0]) > 0)) throw new Error('브라우저 디버깅 포트를 찾지 못했어요');
+      cdp = await connectCdpWs(Number(lines[0]), lines[1], L.startMs);
+    }
+  } catch (e) { await close(); throw e; }
+
   return { cdp, child, profile, close, browser, limits: L };
 }
 
