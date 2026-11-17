@@ -1,18 +1,18 @@
-// 0.4.0: REA 를 함께 설치하기, 정밀 모드(겉, 흐름, 속), 코드 흔적 등급.
+// REA 를 확인을 받고 함께 설치하기, 정밀 모드(겉, 흐름, 속), 코드 흔적 등급.
 // 진짜 REA 와 npm 은 시험에서 부르지 않는다. REA 자리에 대역(fixtures/fake-rea.cjs)을 쓴다. 임시 HOME 과 내 컴퓨터의 시험용 사이트만 쓴다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startSite, fakeClock } from './fixtures/server.mjs';
 import { collect, buildDraftFromPages } from '../skill/reversebusiness/tools/collect.mjs';
 import { checkReport } from '../skill/reversebusiness/tools/check-report.mjs';
 import { buildDraft } from '../skill/reversebusiness/tools/from-rea.mjs';
 import { findBrowser } from '../skill/reversebusiness/tools/render.mjs';
-import { REA_PACKAGE, nodeOk, findRea, reaRunner } from '../skill/reversebusiness/tools/rea-bridge.mjs';
+import { REA_PACKAGE, nodeOk, findRea, reaRunner, reaInstaller } from '../skill/reversebusiness/tools/rea-bridge.mjs';
 import { classifyHosts, scanScripts, termsForbidCodeReading } from '../skill/reversebusiness/tools/deep.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,34 +33,94 @@ function run(dir, args, extra = {}) {
   const log = path.join(dir, 'fake-rea.log');
   const env = { ...process.env, HOME: dir, USERPROFILE: dir, NO_COLOR: '1', TMPDIR: path.join(dir, 'tmp'), REBIZ_REA: 'none', REBIZ_NODE: 'v24.11.0', REBIZ_REA_INSTALLER: JSON.stringify(FAKE_RUN), FAKE_REA_LOG: log, ...extra };
   for (const k of Object.keys(env)) if (env[k] === null) delete env[k];
-  delete env.CLAUDE_CONFIG_DIR; delete env.CODEX_HOME;
+  delete env.CLAUDE_CONFIG_DIR; delete env.CODEX_HOME; delete env.REBIZ_TEST_TTY;
   fs.mkdirSync(env.TMPDIR, { recursive: true });
   const r = spawnSync(process.execPath, [CLI, ...args], { env, cwd: dir, encoding: 'utf8' });
   const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
   return { status: r.status, out: `${r.stdout}${r.stderr}`, calls };
 }
 
-test('REA 를 내려받지 않고, 로컬에 이미 있는 rea 와 Windows .cmd 만 안전하게 찾는다', () => {
+// 대화형 터미널을 흉내 낸다 (REBIZ_TEST_TTY). "[Y/n]" 이 나올 때마다 그때까지의 REA 호출 기록을 찍어 두고 답을 하나씩 넣는다.
+function runTty(dir, args, answers, extra = {}) {
+  const log = path.join(dir, 'fake-rea.log');
+  const env = { ...process.env, HOME: dir, USERPROFILE: dir, NO_COLOR: '1', TMPDIR: path.join(dir, 'tmp'), REBIZ_REA: 'none', REBIZ_NODE: 'v24.11.0', REBIZ_REA_INSTALLER: JSON.stringify(FAKE_RUN), FAKE_REA_LOG: log, REBIZ_TEST_TTY: '1', REBIZ_NO_AUTO_FILL: '1', ...extra };
+  for (const k of Object.keys(env)) if (env[k] === null) delete env[k];
+  delete env.CLAUDE_CONFIG_DIR; delete env.CODEX_HOME; delete env.REBIZ_REA_RUNNER;
+  fs.mkdirSync(env.TMPDIR, { recursive: true });
+  const readCalls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI, ...args], { env, cwd: dir });
+    let out = '';
+    let asked = 0;
+    const atPrompt = [];
+    const onData = (d) => {
+      out += d;
+      const n = (out.match(/\[Y\/n\]/g) || []).length;
+      while (asked < n) {
+        atPrompt.push(readCalls());
+        child.stdin.write(`${answers[asked] ?? 'n'}\n`);
+        asked += 1;
+        if (asked >= answers.length) child.stdin.end(); // 답을 다 넣으면 입력을 닫는다 (닫지 않으면 자식이 입력을 기다린다)
+      }
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (status) => resolve({ status, out, calls: readCalls(), atPrompt }));
+  });
+}
+// rebiz <주소> 를 실제 시계로 돌린다 (대화형이 아님). REA 설치기는 대역, 진짜 rea 는 없는 것으로.
+function runAsync(dir, args, extra = {}) {
+  const log = path.join(dir, 'fake-rea.log');
+  const env = { ...process.env, HOME: dir, USERPROFILE: dir, NO_COLOR: '1', TMPDIR: path.join(dir, 'tmp'), REBIZ_REA: 'none', REBIZ_NODE: 'v24.11.0', REBIZ_REA_INSTALLER: JSON.stringify(FAKE_RUN), FAKE_REA_LOG: log, REBIZ_NO_AUTO_FILL: '1', ...extra };
+  for (const k of Object.keys(env)) if (env[k] === null) delete env[k];
+  delete env.CLAUDE_CONFIG_DIR; delete env.CODEX_HOME; delete env.REBIZ_TEST_TTY;
+  if (!('REBIZ_REA_RUNNER' in extra)) delete env.REBIZ_REA_RUNNER;
+  fs.mkdirSync(env.TMPDIR, { recursive: true });
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI, ...args], { env, cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (status) => resolve({ status, out, calls: fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [] }));
+  });
+}
+
+test('REA 를 부르는 이름은 공식 npm 패키지 하나뿐이고, Node 판을 먼저 본다', () => {
   assert.equal(REA_PACKAGE, 'rea-agents');
   for (const v of ['v22.19.0', 'v22.30.1', 'v24.11.0', 'v24.22.3', 'v26.0.0']) assert.equal(nodeOk(v), true, v);
   for (const v of ['v18.20.0', 'v20.18.0', 'v22.18.9', 'v23.5.0', 'v24.10.9', 'v25.1.0', 'v26.0.0-rc.1']) assert.equal(nodeOk(v), false, v);
-  // 실행 파일과 문서 어디에도 외부 패키지 자동 설치/다운로드(npx rea-agents 등)가 없다
-  for (const f of ['bin/rebiz.mjs', 'lib/agents.mjs', 'skill/reversebusiness/tools/rea-bridge.mjs', 'skill/reversebusiness/tools/collect.mjs', 'README.md', 'skill/reversebusiness/SKILL.md']) {
+  // 실행 파일과 문서 어디에도 다른 패키지 이름이나 다른 설치 주소가 없다
+  for (const f of ['bin/rebiz.mjs', 'lib/agents.mjs', 'skill/reversebusiness/tools/rea-bridge.mjs', 'skill/reversebusiness/tools/collect.mjs', 'README.md', 'AGENTS.md', 'skill/reversebusiness/SKILL.md']) {
     const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    for (const m of text.matchAll(/npx\s+(?:-y\s+|--yes\s+)?([@\w$][@\w./:${}-]*)/g)) assert.ok(/^(github:wonseokjung\/reversebusiness|rebiz)$/.test(m[1]), `${f}: npx ${m[1]}`);
-    assert.ok(!/npm\s+(i|install)\s+(-g\s+|--global\s+)?[a-z@]/.test(text), f);
+    for (const m of text.matchAll(/npx\s+(?:-y\s+|--yes\s+)?([@\w$][@\w./:${}-]*)/g)) assert.ok(/^(rea-agents(@latest)?|github:wonseokjung\/reversebusiness|rebiz|\$\{REA_PACKAGE\}@latest)$/.test(m[1]), `${f}: npx ${m[1]}`);
+    assert.ok(!/npm\s+(i|install)\s+(-g\s+|--global\s+)?(?!rea-agents)[a-z@]/.test(text), f);
+    assert.ok(!/dangerously|skip-permissions|--no-sandbox|danger-full-access/.test(text), `${f}: 권한 확인을 건너뛰는 옵션`);
   }
-  // POSIX: 같은 폴더에 node 가 없으면 현재 Node 판을 본다
+  // rea 실행 파일 찾기: 같은 폴더에 node 가 없으면 지금 Node 판을 본다
   const dir = tmp();
   fs.mkdirSync(path.join(dir, '.local', 'opt', 'node-v24.99.0', 'bin'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.local', 'opt', 'node-v24.99.0', 'bin', 'rea'), '#!/usr/bin/env node\n');
   assert.equal(findRea({ env: { PATH: '', REBIZ_NODE: 'v20.0.0' }, home: dir, platform: 'linux' }), null, '같은 폴더에 node 가 없고 지금 Node 도 낮으면 못 쓰는 것으로 본다');
   assert.equal(findRea({ env: { PATH: '', REBIZ_NODE: 'v24.11.0' }, home: dir, platform: 'linux' }).bin, path.join(dir, '.local', 'opt', 'node-v24.99.0', 'bin', 'rea'));
   assert.equal(findRea({ env: { PATH: path.join(dir, '.local', 'opt', 'node-v24.99.0', 'bin'), REBIZ_REA: 'none' }, home: dir, platform: 'linux' }), null);
-  // 로컬에 없으면 언제나 null (npx 내려받기 없음)
-  assert.equal(reaRunner({ env: { PATH: '', REBIZ_REA: 'none', REBIZ_NODE: 'v24.11.0' }, home: dir, platform: 'linux' }), null);
-  assert.equal(reaRunner({ env: { PATH: '', REBIZ_NODE: 'v24.11.0' }, home: tmp(), platform: 'linux' }), null);
-  // Windows: %APPDATA%\npm\rea.cmd 를 cmd.exe /d /c 로 감싼다
+  // 실행 파일도 REA 스킬도 없으면 부를 방법이 없다 (내려받지 않는다)
+  const empty = tmp();
+  assert.equal(reaRunner({ env: { PATH: '', REBIZ_NODE: 'v24.11.0' }, home: empty, platform: 'linux' }), null);
+  // 확인을 받고 REA setup 으로 설치했으면(REA 스킬이 있음) 공식 패키지를 npx 로 부른다
+  fs.mkdirSync(path.join(empty, '.agents', 'skills', 'reverse-engineer-anything'), { recursive: true });
+  fs.writeFileSync(path.join(empty, '.agents', 'skills', 'reverse-engineer-anything', 'SKILL.md'), 'x\n');
+  assert.deepEqual(reaRunner({ env: { PATH: '', REBIZ_NODE: 'v24.11.0' }, home: empty, platform: 'linux' }).pre, ['-y', 'rea-agents@latest']);
+  assert.equal(reaRunner({ env: { PATH: '', REBIZ_NODE: 'v24.11.0' }, home: empty, platform: 'linux', allowNpx: false }), null);
+  assert.equal(reaRunner({ env: { PATH: '', REBIZ_NODE: 'v20.18.0' }, home: empty, platform: 'linux' }), null, 'Node 가 낮으면 npx 로도 부르지 않는다');
+  assert.equal(reaRunner({ env: { PATH: '', REBIZ_REA: 'none', REBIZ_NODE: 'v24.11.0' }, home: empty, platform: 'linux' }), null);
+  // 설치기: 지금 Node 옆의 npx 로, 공식 이름 하나로만
+  const posix = reaInstaller({ env: { REBIZ_NODE: 'v24.11.0' }, platform: 'linux', execPath: '/opt/node/bin/node' });
+  assert.deepEqual([path.basename(posix.cmd), ...posix.pre], ['npx', '-y', 'rea-agents@latest']);
+  assert.equal(reaInstaller({ env: { REBIZ_NODE: 'v20.18.0' }, platform: 'linux' }), null);
+  // Windows: npx 는 .cmd 라서 cmd.exe /d /c 로 감싼다. 깔린 rea.cmd 도 같다.
+  const win = reaInstaller({ env: { REBIZ_NODE: 'v24.11.0' }, platform: 'win32', execPath: 'C:\\Program Files\\nodejs\\node.exe' });
+  assert.equal(win.cmd, 'cmd.exe');
+  assert.deepEqual(win.pre, ['/d', '/c', 'npx.cmd', '-y', 'rea-agents@latest']);
   const winApp = path.join(dir, 'appdata');
   const winBin = path.join(winApp, 'npm', 'rea.cmd');
   fs.mkdirSync(path.dirname(winBin), { recursive: true });
@@ -69,39 +129,112 @@ test('REA 를 내려받지 않고, 로컬에 이미 있는 rea 와 Windows .cmd 
   assert.equal(winRun.cmd, 'cmd.exe');
   assert.deepEqual(winRun.pre, ['/d', '/c', winBin]);
   fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(empty, { recursive: true, force: true });
 });
 
-test('설치: 외부 REA 를 내려받지 않고 단독 설치하며, 이미 있는 로컬 REA 만 조용히 알려 준다', () => {
+test('설치: REA 가 없으면 바뀔 것을 보여 주고, 확인을 받은 뒤에만 REA 를 부른다', async () => {
   const dir = home('.claude', '.codex');
   fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), '{"keep":"me"}\n');
-  // dry-run & 무확인 실행: 외부 패키지를 부르지 않는다
+  // dry-run: REA 를 내려받지도 부르지도 않는다 (무엇을 할지만 알려 준다)
   let r = run(dir, ['--dry-run']);
   assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /외부 패키지를 내려받지 않습니다/);
-  assert.doesNotMatch(r.out, /rea-agents|REA\(원본/);
-  assert.deepEqual(r.calls, []);
+  assert.match(r.out, /REA 가 없습니다\. 확인하면 공식 REA 를 설치해 정밀 모드\(겉, 흐름, 속\)로 읽습니다\./);
+  assert.match(r.out, /패키지\s+rea-agents\s+\(npm 의 공식 패키지\. 이 이름만 씁니다\)/);
+  assert.match(r.out, /실행할 명령\s+npx -y rea-agents@latest setup --client claude_code --client codex/);
+  assert.match(r.out, /바뀔 곳\s+claude_code, codex 의 설정 파일\s+REA 연결 추가/);
+  assert.match(r.out, /확인 전에는 아무것도 내려받지 않습니다\. 건너뛰려면 --no-rea/);
+  assert.deepEqual(r.calls, [], 'dry-run 은 REA 를 부르지 않는다');
+  assert.ok(!fs.existsSync(path.join(dir, '.agents')), 'dry-run 은 아무것도 만들지 않는다');
+  // 물어볼 사람이 없는 터미널에서 --yes 가 없으면 둘 다 설치하지 않고, 바뀔 것만 보여 준다
   r = run(dir, ['--no-open']);
+  assert.match(r.out, /REA 가 없습니다\. 확인하면/);
   assert.match(r.out, /--yes 를 붙여 다시 실행하세요/);
-  assert.deepEqual(r.calls, []);
+  assert.deepEqual(r.calls, [], '확인 전에는 REA 를 부르지 않는다');
   assert.ok(!fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness')));
-  // --yes: reversebusiness 스킬만 깔고, 외부 도구는 내려받지 않는다
+  // 대화형: 스킬은 예, REA 는 아니오 -> REA 는 한 번도 부르지 않는다
+  r = await runTty(dir, ['--no-open'], ['y', 'n']);
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /reversebusiness 스킬을 설치할까요\? \[Y\/n\]/);
+  assert.match(r.out, /REA 도 설치할까요\? \[Y\/n\]/);
+  assert.match(r.out, /REA 는 설치하지 않았습니다\. 가벼운 모드로 동작합니다\. 나중에 정밀 모드로: npx -y rea-agents@latest setup/);
+  assert.deepEqual(r.calls, []);
+  assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'SKILL.md')), '우리 스킬은 설치된다');
+  assert.ok(!fs.existsSync(path.join(dir, '.agents', 'skills', 'reverse-engineer-anything')));
+  // 대화형: REA 에 예 -> 묻는 순간까지는 호출 0, 답한 뒤에 REA 의 계획을 받아 보여 주고 설치한다
+  r = await runTty(dir, ['--no-open'], ['y', 'y']);
+  assert.equal(r.status, 0, r.out);
+  assert.equal(r.atPrompt.length, 2, '스킬 갱신과 REA 를 따로 묻는다');
+  assert.deepEqual(r.atPrompt[1], [], 'REA 확인 전에는 REA(npx)를 한 번도 부르지 않는다');
+  assert.deepEqual(r.calls, [['setup', '--client', 'claude_code', '--client', 'codex', '--dry-run', '--json'], ['setup', '--client', 'claude_code', '--client', 'codex', '--yes', '--json']]);
+  assert.match(r.out, /claude_code\s+~[\\/]\.claude_code\.fake\.json\s+REA 연결 추가/);
+  assert.match(r.out, /REA reverse-engineering skill\s+~[\\/]\.agents[\\/]skills[\\/]reverse-engineer-anything\s+REA 스킬 설치/);
+  assert.match(r.out, /REA 설치 {2}에이전트 연결 2곳, REA 스킬 설치/);
+  assert.equal(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'), '{"keep":"me"}\n', '우리 설치기는 설정 파일을 건드리지 않는다');
+  // 다시 실행: REA 스킬이 있으니 다시 설치하지 않는다
   fs.rmSync(path.join(dir, 'fake-rea.log'), { force: true });
   r = run(dir, ['--yes', '--no-open']);
-  assert.equal(r.status, 0, r.out);
-  assert.deepEqual(r.calls, [], '설치 중에는 외부 REA 명령을 부르지 않는다');
-  assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'tools', 'rea-bridge.mjs')));
-  assert.equal(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'), '{"keep":"me"}\n', '설치기는 에이전트 설정 파일을 건드리지 않는다');
-  assert.match(r.out, /이제 에이전트를 새로 시작하고 이렇게 말하세요/);
-  // 이미 로컬에 REA 가 있으면 확인만 하고 건드리지 않는다
-  r = run(dir, ['--yes', '--no-open'], { REBIZ_REA: null, REBIZ_REA_RUNNER: JSON.stringify(FAKE_RUN) });
-  assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /로컬 REA\(6\.9\.0\) 감지됨/);
-  assert.deepEqual(r.calls, [['--version']]);
-  // --remove: reversebusiness 만 지운다
-  fs.rmSync(path.join(dir, 'fake-rea.log'), { force: true });
+  assert.match(r.out, /REA 있음.*다시 설치하지 않습니다/);
+  assert.deepEqual(r.calls, [], '있으면 npx 를 부르지 않는다 (판을 묻는 것도 없음)');
+  // --remove: 우리 것만 지운다. REA 는 사용자가 따로 지운다.
   r = run(dir, ['--remove']);
   assert.equal(r.status, 0, r.out);
   assert.ok(!fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness')));
+  assert.ok(fs.existsSync(path.join(dir, '.agents', 'skills', 'reverse-engineer-anything', 'SKILL.md')), 'REA 는 지우지 않는다');
+  assert.match(r.out, /REA 는 지우지 않았습니다 \(별개의 도구\)\. REA 까지 지우려면: npx -y rea-agents@latest uninstall/);
+  assert.deepEqual(r.calls, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('설치: --yes, --no-rea, Node 가 낮을 때, 이미 있을 때, 계획이나 설치가 실패할 때', () => {
+  let dir = home('.claude', '.codex');
+  let r = run(dir, ['--yes', '--no-open']);
+  assert.equal(r.status, 0, r.out);
+  assert.deepEqual(r.calls.map((c) => c.at(-2)), ['--dry-run', '--yes'], '--yes 는 묻지 않고 계획을 받은 뒤 설치');
+  assert.match(r.out, /REA 설치 {2}에이전트 연결 2곳, REA 스킬 설치 {2}\(ready\)/);
+  assert.ok(fs.existsSync(path.join(dir, '.agents', 'skills', 'reverse-engineer-anything', 'SKILL.md')), '대역이 REA 스킬 자리를 만들었다');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  dir = home('.claude');
+  r = run(dir, ['--yes', '--no-open', '--no-rea']);
+  assert.match(r.out, /REA 설치 제안을 건너뜁니다 \(--no-rea\)/);
+  assert.deepEqual(r.calls, []);
+  assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'SKILL.md')));
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  dir = home('.claude');
+  r = run(dir, ['--yes', '--no-open'], { REBIZ_NODE: 'v20.18.0', REBIZ_REA_INSTALLER: null });
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /REA 는 건너뜁니다\. REA 는 Node 22\.19 이상\(22\.x\), 24\.11 이상\(24\.x\), 26 이상이 필요한데 지금 Node 는 v20\.18\.0 입니다\./);
+  assert.match(r.out, /가벼운 모드로 동작합니다/);
+  assert.deepEqual(r.calls, []);
+  assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'SKILL.md')), '우리 스킬은 그대로 설치한다');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  dir = home('.claude');
+  r = run(dir, ['--yes', '--no-open'], { REBIZ_REA: null, REBIZ_REA_RUNNER: JSON.stringify(FAKE_RUN) });
+  assert.match(r.out, /REA 있음 \(6\.9\.0\)\. 다시 설치하지 않습니다/);
+  assert.deepEqual(r.calls, [['--version']], '버전만 묻고 setup 은 부르지 않는다');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  dir = home('.claude');
+  r = run(dir, ['--yes', '--no-open'], { FAKE_REA_FAIL: 'setup' });
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /REA 는 건너뜁니다\s+REA 의 설치 계획을 받지 못했습니다\. 가벼운 모드로 계속합니다/);
+  assert.equal(r.calls.length, 1);
+  assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'SKILL.md')));
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  dir = home('.claude');
+  r = run(dir, ['--yes', '--no-open'], { FAKE_REA_FAIL: 'apply' });
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /REA 설치 실패\s+REA setup 이 끝나지 않았습니다\. 가벼운 모드로 계속합니다\. 나중에: npx -y rea-agents@latest setup/);
+  assert.equal(r.calls.length, 2);
+  assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'reversebusiness', 'SKILL.md')), 'REA 가 실패해도 우리 스킬은 남는다');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  dir = home();
+  r = run(dir, ['--dir', path.join(dir, 'custom'), '--yes', '--no-open']);
+  assert.match(r.out, /REA 를 연결할 에이전트를 고르지 않았습니다/);
   assert.deepEqual(r.calls, []);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -285,6 +418,94 @@ test('rebiz <주소>: REA 가 있으면 정밀 모드, --light 로 끈다 (대�
     assert.match(light.out, /흐름 읽기\s+안 함\s+가벼운 모드로 실행했다 \(--light\)/);
     assert.ok(!fs.existsSync(path.join(dir, 'light', 'evidence')));
   } finally { await site.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('rebiz <주소>: REA 가 없으면 확인을 받은 뒤에만 설치하고, 아니면 가벼운 모드로 끝까지 읽는다 (대역 REA, 실제 시계)', { skip: BROWSER ? false : '브라우저 없음' }, async () => {
+  // 가벼운 모드로 끝나는 경우는 스크립트가 없는 페이지(/plain)를 읽어 브라우저를 띄우지 않게 해 시간을 줄인다. 정밀 모드를 볼 때만 /spa.
+  const plain = (req, res, html) => html('<!doctype html><html><head><title>달콤 구독 | 시험용</title></head><body><main><h1>시험용으로 지어낸 구독 가게</h1><p>매달 9,900원에 간식 상자를 보냅니다. 시험용으로 지어낸 글입니다.</p></main></body></html>');
+  const site = await startSite({ routes: { '/plain': plain } });
+  const url = `${site.origin}/plain`;
+  const spa = `${site.origin}/spa`;
+  const base = ['--no-open', '--no-fill', '--own', '--pages', '1'];
+  try {
+    // --dry-run: 바뀔 것만 보여 주고, REA 도 대상 사이트도 부르지 않는다
+    let dir = home('.claude');
+    let r = await runAsync(dir, [url, ...base, '--dry-run', '--out', path.join(dir, 'out')]);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /REA 가 없습니다\. 확인하면 공식 REA 를 설치해/);
+    assert.match(r.out, /실행할 명령\s+npx -y rea-agents@latest setup --client claude_code/);
+    assert.match(r.out, /dry-run: 아무것도 내려받거나 읽지 않고 여기서 멈춥니다/);
+    assert.deepEqual(r.calls, []);
+    assert.equal(site.seen.length, 0, 'dry-run 은 대상 사이트에도 요청하지 않는다');
+    assert.ok(!fs.existsSync(path.join(dir, 'out')));
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // 물어볼 사람이 없는 터미널: 설치하지 않고 바뀔 것만 보여 준 뒤 가벼운 모드로 끝까지
+    dir = home('.claude');
+    r = await runAsync(dir, [url, ...base, '--out', path.join(dir, 'out')]);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /REA 가 없습니다\. 확인하면/);
+    assert.match(r.out, /물어볼 사람이 없는 터미널이라 REA 는 설치하지 않았습니다\. 설치하고 읽으려면 --yes/);
+    assert.deepEqual(r.calls, [], '확인 없이는 REA 를 한 번도 부르지 않는다');
+    assert.match(r.out, /깊이 {4}가벼운 모드/);
+    assert.match(r.out, /REA 를 설치하지 않아 가벼운 모드로 읽었습니다\. 정밀 모드로: /);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'out', 'report.json'), 'utf8')).meta.depth.mode, 'light');
+    assert.ok(!fs.existsSync(path.join(dir, '.agents', 'skills', 'reverse-engineer-anything')));
+
+    // 대화형으로 거절: 묻는 순간까지 호출 0, 거절 뒤에도 0, 가벼운 모드로 정상 완료
+    r = await runTty(dir, [url, ...base, '--out', path.join(dir, 'tty')], ['n']);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /REA 도 설치할까요\? \[Y\/n\]/);
+    assert.deepEqual(r.atPrompt, [[]]);
+    assert.deepEqual(r.calls, []);
+    assert.match(r.out, /깊이 {4}가벼운 모드/);
+    assert.ok(fs.existsSync(path.join(dir, 'tty', 'report.html')));
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // --no-rea: 묻지도 보여 주지도 않고 가벼운 모드
+    dir = home('.claude');
+    r = await runAsync(dir, [url, ...base, '--no-rea', '--out', path.join(dir, 'out')]);
+    assert.equal(r.status, 0, r.out);
+    assert.doesNotMatch(r.out, /REA 가 없습니다/);
+    assert.match(r.out, /REA 설치 제안을 건너뛰었습니다 \(--no-rea\)/);
+    assert.deepEqual(r.calls, []);
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // 설치 실패: 해부는 막히지 않고 가벼운 모드로 계속
+    dir = home('.claude');
+    r = await runAsync(dir, [url, ...base, '--yes', '--out', path.join(dir, 'out')], { FAKE_REA_FAIL: 'apply' });
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /REA 설치 실패/);
+    assert.match(r.out, /REA 설치가 끝나지 않아 가벼운 모드로 읽었습니다/);
+    assert.deepEqual(r.calls.map((c) => c[0]), ['setup', 'setup'], '실패한 REA 로 읽지 않는다');
+    assert.ok(fs.existsSync(path.join(dir, 'out', 'report.json')));
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // --yes: 묻지 않고 설치한 뒤 그 REA 로 정밀 모드
+    dir = home('.claude');
+    r = await runAsync(dir, [spa, ...base, '--yes', '--out', path.join(dir, 'out')]);
+    assert.equal(r.status, 0, r.out);
+    assert.deepEqual(r.calls.slice(0, 2).map((c) => c.at(-2)), ['--dry-run', '--yes']);
+    assert.match(r.out, /REA 설치 {2}에이전트 연결 1곳, REA 스킬 설치/);
+    assert.ok(r.calls.slice(2).some((c) => c[0] === 'inspect-web-page'), '설치한 REA 로 겉 읽기');
+    assert.match(r.out, /깊이 {4}정밀 모드 \(REA\)/);
+    // 이미 있으면(REA 스킬이 놓임) 다시 설치하지 않는다. 묻지도 않는다.
+    fs.rmSync(path.join(dir, 'fake-rea.log'), { force: true });
+    r = await runAsync(dir, [spa, ...base, '--out', path.join(dir, 'again')], { REBIZ_REA: null, REBIZ_REA_RUNNER: JSON.stringify(FAKE_RUN) });
+    assert.equal(r.status, 0, r.out);
+    assert.doesNotMatch(r.out, /REA 가 없습니다|REA 도 설치할까요/);
+    assert.ok(!r.calls.some((c) => c[0] === 'setup'), '있으면 setup 을 부르지 않는다');
+    assert.match(r.out, /깊이 {4}정밀 모드 \(REA\)/);
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // Node 가 낮으면 묻지 않고, 까닭을 한 줄로
+    dir = home('.claude');
+    r = await runAsync(dir, [url, ...base, '--out', path.join(dir, 'out')], { REBIZ_NODE: 'v20.18.0', REBIZ_REA_INSTALLER: null });
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /REA 는 Node 22\.19 이상.*지금 Node 는 v20\.18\.0 입니다/);
+    assert.deepEqual(r.calls, []);
+    fs.rmSync(dir, { recursive: true, force: true });
+  } finally { await site.close(); }
 });
 
 test('검사기: 코드에서만 본 것은 관찰로 쓸 수 없다', () => {

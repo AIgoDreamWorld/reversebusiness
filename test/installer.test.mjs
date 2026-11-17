@@ -41,8 +41,8 @@ test('dry-run 은 아무것도 바꾸지 않고 바뀔 것만 보여 준다', ()
   assert.match(r.out, /Claude Code\s+~[\\/]\.claude[\\/]skills[\\/]reversebusiness\s+새로 설치/);
   assert.match(r.out, /Codex\s+~[\\/]\.agents[\\/]skills[\\/]reversebusiness\s+새로 설치/);
   assert.match(r.out, /Antigravity\s+~[\\/]\.gemini[\\/]config[\\/]skills[\\/]reversebusiness\s+새로 설치/);
-  assert.match(r.out, /에이전트의 설정 파일은 건드리지 않으며 외부 패키지를 내려받지 않습니다/);
-  assert.doesNotMatch(r.out, /npx -y rea-agents/);
+  assert.match(r.out, /이 복사는 에이전트의 설정 파일을 건드리지 않습니다/);
+  assert.match(r.out, /REA 는 건너뜁니다\. REA 는 Node 22\.19 이상/, 'Node 가 낮으면 REA 는 건너뛰고 까닭을 알려 준다');
   assert.deepEqual(tree(dir), before);
   fs.rmSync(dir, { recursive: true, force: true });
 });

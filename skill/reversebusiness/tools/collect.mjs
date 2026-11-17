@@ -496,7 +496,7 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
   }
   const hostsSeen = new Map();
 
-  // ---------- 정밀 모드: 로컬에 이미 있는 REA 를 눈으로 쓴다 (외부 내려받기 없음) ----------
+  // ---------- 정밀 모드: 이미 있는 REA 를 눈으로 쓴다 (깔린 실행 파일, 또는 사용자가 확인하고 설치한 공식 패키지) ----------
   const reaRun = mode === 'light' ? null : rea !== undefined ? rea : reaRunner();
   const saveEvidence = (name, text) => { if (!evidenceDir) return ''; try { fs.mkdirSync(evidenceDir, { recursive: true }); fs.writeFileSync(path.join(evidenceDir, name), text); return `evidence/${name}`; } catch { return ''; } };
   // 겉 읽기: REA 가 같은 탭에 붙어서 글과 구조, 저장소 키 이름을 읽는다. 누르지 않는다.

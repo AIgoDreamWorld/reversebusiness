@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // rebiz: reversebusiness 의 실행 파일. 의존성 없음, Node 18 이상.
 //
-//   rebiz                       에이전트를 찾아 reversebusiness 스킬을 설치하고, 예시 해부 화면을 연다
-//   rebiz <주소>                그 주소의 공개 페이지를 읽어 해부 화면을 연다 (로컬에 REA 가 있으면 정밀 모드)
+//   rebiz                       에이전트를 찾아 reversebusiness 스킬을 설치하고(REA 가 없으면 확인을 받아 함께), 예시 해부 화면을 연다
+//   rebiz <주소>                그 주소의 공개 페이지를 읽어 해부 화면을 연다. REA 가 있으면 정밀 모드 (없으면 확인을 받아 설치)
 //   rebiz demo                  예시 해부 화면만 연다
 //   rebiz view <report.json>    리포트를 해부 화면으로 연다 (--mine <내 버전 폴더>)
 //   rebiz check <report.json>   리포트 검사
@@ -12,9 +12,11 @@
 //   rebiz build <report.json>   내 버전 명세와 배운 구역 순서로 새 사이트의 출발점 만들기 (--out, --topic)
 //   rebiz apply <report.json> --to <내 프로젝트 폴더>          배운 뼈대와 내 첫 화면을 견준 빈칸 목록, --agent 를 주면 새 브랜치에서 고치기까지
 //   rebiz video <report.json>   해부 영상(9:16)을 파일로 뽑기 (--out, --mine)
-//   rebiz --remove              이 도구가 설치한 스킬만 지우기
+//   rebiz --remove              이 도구가 설치한 스킬만 지우기 (REA 는 지우지 않음)
 //
-// 우리 스킬 설치는 폴더 복사 하나뿐이고 에이전트의 설정 파일을 건드리지 않는다. 외부 패키지를 내려받지 않는다.
+// 우리 스킬 설치는 폴더 복사 하나뿐이고 에이전트의 설정 파일을 건드리지 않는다.
+// REA(별개의 도구, 원본 morluto/rea, MIT)는 사용자가 확인한 뒤에만 공식 npm 패키지 rea-agents 로 설치한다.
+// 에이전트 설정에 REA 연결을 더하는 것은 REA 의 setup 이 한다. 확인 전에는 아무것도 내려받지 않는다. --no-rea 로 건너뛴다.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,7 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { makeTerm } from '../lib/term.mjs';
 import { SKILL_NAME, planTargets, planInstall, applyInstall, planRemove, applyRemove, countFiles } from '../lib/agents.mjs';
-import { reaState } from '../skill/reversebusiness/tools/rea-bridge.mjs';
+import { REA_PACKAGE, REA_REPO, REA_NODE, REA_CLIENTS, REA_SKILL, reaState, reaInstaller, runRea, currentNode, nodeOk } from '../skill/reversebusiness/tools/rea-bridge.mjs';
 import { AGENT_CLIS, DEFAULT_MINUTES, findAgentCli, agentScope, runAgent, fillPrompt, specPrompt, applyPrompt } from '../lib/delegate.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,8 +56,8 @@ const COMMAND_TABLE = [
   { name: 'demo', group: 'see', usage: 'rebiz demo', text: '예시 해부 화면만 열기' },
   { name: 'build', group: 'make', usage: 'rebiz build <report.json>', text: '내 버전 명세와 배운 구역 순서로 새 사이트의 출발점 만들기 (--out <폴더>, --topic "내 사업 주제")' },
   { name: 'apply', group: 'make', usage: 'rebiz apply <report.json> --to <내 프로젝트 폴더>', text: '배운 뼈대와 내 첫 화면을 견준 빈칸 목록 (--page <파일>, --url http://localhost:포트). --agent 를 주면 새 git 브랜치에서 고치기까지. 커밋과 배포는 하지 않음' },
-  { name: 'install', group: 'setup', usage: 'rebiz', text: '깔려 있는 에이전트를 찾아 스킬 설치 (Claude Code, Codex, Gemini CLI, Cursor, Antigravity)' },
-  { name: 'remove', group: 'setup', usage: 'rebiz --remove', text: '이 도구가 설치한 스킬만 지우기', alias: ['uninstall'] },
+  { name: 'install', group: 'setup', usage: 'rebiz', text: '깔려 있는 에이전트를 찾아 스킬 설치, REA 가 없으면 확인을 받아 함께 (Claude Code, Codex, Gemini CLI, Cursor, Antigravity)' },
+  { name: 'remove', group: 'setup', usage: 'rebiz --remove', text: '이 도구가 설치한 스킬만 지우기 (REA 는 지우지 않음)', alias: ['uninstall'] },
   { name: 'help', group: 'setup', hidden: true },
   { name: 'version', group: 'setup', hidden: true },
 ];
@@ -120,7 +122,7 @@ function help() {
   banner();
   say('사업 웹사이트 주소 하나를 넣으면 그 사업을 해부합니다. 읽기, 해부(6칸), 내 버전 만들기, 검사.');
   say();
-  say(`  ${NPX}                 에이전트에 스킬 설치 + 예시 해부 화면 열기`);
+  say(`  ${NPX}                 에이전트에 스킬 설치(REA 가 없으면 확인을 받아 함께) + 예시 해부 화면 열기`);
   say(`  ${NPX} <주소>          그 주소를 바로 해부 (에이전트가 있으면 확인 뒤 끝까지 완성, --no-fill 로 초안만)`);
   say(T.dim('  아래의 rebiz 자리에 위 npx 줄을 쓰면 설치 없이 같은 명령이 됩니다.'));
   say();
@@ -133,7 +135,7 @@ function help() {
   }
   say();
   say('옵션');
-  say('  --yes, -y        묻지 않고 설치');
+  say('  --yes, -y        묻지 않고 설치 (REA 가 없으면 REA 도)');
   say('  --dry-run        무엇이 바뀌는지만 보여 주기');
   say('  --remove         이 도구가 설치한 스킬만 지우기');
   say('  --no-open        브라우저를 열지 않고 주소만 출력');
@@ -143,7 +145,8 @@ function help() {
   say('  --out <폴더>     <주소> 를 읽은 결과를 둘 곳    --pages <1~5>   읽을 페이지 수');
   say('  --own            <주소> 가 내 것일 때 (리포트에 내 것으로 적음)');
   say('  --no-render      글이 얇아도 브라우저로 그려 읽지 않기   --render   항상 그려 읽기');
-  say('  --light          로컬 REA 가 있어도 가벼운 모드로 읽기 (펼치기와 코드 읽기 없음)');
+  say('  --light          REA 가 있어도 가벼운 모드로 읽기 (펼치기와 코드 읽기 없음)');
+  say('  --no-rea         REA 설치 제안을 건너뛰기 (REA 가 없으면 가벼운 모드)');
   say('  --dissect-only   check 에서 내 버전 칸이 비어 있어도 통과 (해부만 했을 때)');
   say('  --topic <말>     build 에서 내 사업의 주제       --to <폴더>   apply 할 내 프로젝트 폴더');
   say('  --page <파일>    apply 에서 내 첫 화면 파일      --url <주소>  apply 에서 내 개발 서버 주소 (내 컴퓨터 주소만)');
@@ -181,6 +184,84 @@ async function showDemo(o) {
 }
 
 const ACTION_LABEL = { install: '새로 설치', update: '갱신', replace: '백업 후 설치', skip: '건너뜀', blocked: '건드리지 않음' };
+// 물어볼 사람이 있는 터미널인지. REBIZ_TEST_TTY 는 시험에서 대화형 확인을 흉내 낼 때만 쓴다.
+const interactive = () => process.env.REBIZ_TEST_TTY === '1' || !!(process.stdin.isTTY && process.stdout.isTTY);
+
+// ---------- REA 함께 설치하기 (확인을 받은 뒤에만) ----------
+// REA 가 낸 JSON 을 읽는다 (앞뒤에 다른 글이 섞여도 첫 중괄호부터 읽는다).
+function parseJson(text) {
+  const i = String(text).indexOf('{');
+  if (i < 0) return null;
+  try { return JSON.parse(String(text).slice(i)); } catch { return null; }
+}
+const REA_HOW = `npx -y ${REA_PACKAGE}@latest setup`;
+const reaCmd = (args) => `npx -y ${REA_PACKAGE}@latest ${args.join(' ')}`;
+// REA 를 함께 설치할지 정한다. 여기서는 아무것도 내려받지 않고, 아무것도 부르지 않고, 아무것도 바꾸지 않는다.
+// forDissect: rebiz <주소> 에서 부를 때. 연결할 에이전트가 없어도 이번 해부에는 쓸 수 있다.
+async function planRea(o, targets, { forDissect = false } = {}) {
+  if (o.noRea) return { state: 'skip', line: 'REA 설치 제안을 건너뜁니다 (--no-rea). REA 가 없으면 가벼운 모드로 동작합니다.' };
+  const st = await reaState();
+  if (st.state === 'present') {
+    const usable = st.runner && (st.runner.how !== 'npx' || nodeOk(currentNode()));
+    return { state: 'present', line: usable ? `REA 있음${st.version ? ` (${st.version})` : ''}. 다시 설치하지 않습니다. 주소를 넣으면 정밀 모드로 읽습니다.` : `REA 있음 (스킬 확인). 다시 설치하지 않습니다. 다만 지금 Node(${currentNode()})로는 REA 를 부를 수 없어 주소 해부는 가벼운 모드로 동작합니다. REA 는 ${REA_NODE}이 필요합니다.` };
+  }
+  if (st.state === 'node-too-old') return { state: 'node-too-old', line: `REA 는 건너뜁니다. REA 는 ${REA_NODE}이 필요한데 지금 Node 는 ${currentNode()} 입니다. Node 를 올린 뒤 ${REA_HOW} 을 실행하면 정밀 모드가 켜집니다. 그때까지는 가벼운 모드로 동작합니다.` };
+  const installer = reaInstaller();
+  const keys = [...new Set(targets.flatMap((t) => t.keys || []))];
+  const clients = [...new Set(keys.map((k) => REA_CLIENTS[k]).filter(Boolean))];
+  if (!clients.length && !forDissect) return { state: 'no-client', line: `REA 는 건너뜁니다. REA 를 연결할 에이전트를 고르지 않았습니다. 나중에: ${REA_HOW}` };
+  const args = clients.length ? ['setup', ...clients.flatMap((c) => ['--client', c])] : null;
+  return { state: 'install', installer, args, clients };
+}
+const REA_ACT = { configure_client: 'REA 연결 추가', install_skill: 'REA 스킬 설치' };
+// 확인을 받기 전에 보여 주는 것: 공식 패키지 이름, 실행할 명령, 바뀔 위치.
+function showReaPlan(rp) {
+  say(T.dim(`REA (원본 ${REA_REPO.replace('https://', '')}, MIT, 별개의 도구)`));
+  if (rp.state !== 'install') { say(`  ${rp.state === 'present' ? T.ivory(rp.line) : T.dim(rp.line)}`); return; }
+  say(`  ${T.ivory('REA 가 없습니다. 확인하면 공식 REA 를 설치해 정밀 모드(겉, 흐름, 속)로 읽습니다.')}`);
+  say(`  ${T.pad('패키지', 14)}${REA_PACKAGE}  ${T.dim('(npm 의 공식 패키지. 이 이름만 씁니다)')}`);
+  if (rp.args) {
+    say(`  ${T.pad('실행할 명령', 14)}${reaCmd(rp.args)}`);
+    say(`  ${T.pad('바뀔 곳', 14)}${rp.clients.join(', ')} 의 설정 파일  ${T.gold('REA 연결 추가')}`);
+    say(`  ${T.pad('', 14)}${tilde(path.join(HOME, '.agents', 'skills', REA_SKILL))} 등 스킬 폴더  ${T.gold('REA 스킬 설치')}`);
+    say(T.dim('  설정 파일을 바꾸는 것은 REA 의 setup 이며, 바꾸기 전에 REA 가 백업을 남깁니다. 확인한 뒤 REA 가 낸 정확한 계획을 먼저 보여 줍니다.'));
+  } else {
+    say(`  ${T.pad('실행할 명령', 14)}${reaCmd(['inspect-web-page', '…'])}  ${T.dim('(이번 해부에만)')}`);
+    say(`  ${T.pad('바뀔 곳', 14)}npm 의 내려받기 보관함만. ${T.dim('REA 를 연결할 에이전트가 없어 설정 파일은 바꾸지 않습니다')}`);
+  }
+  say(T.dim(`  확인 전에는 아무것도 내려받지 않습니다. 건너뛰려면 --no-rea`));
+}
+// REA 설치를 확인받는다. 돌려주는 것: yes / no / need-yes / dry-run
+async function confirmRea(o) {
+  if (o.dryRun) return 'dry-run';
+  if (o.yes) return 'yes';
+  if (!interactive()) return 'need-yes';
+  return isYes(await ask(`${T.gold('?')} REA 도 설치할까요? [Y/n] `)) ? 'yes' : 'no';
+}
+// 확인을 받은 뒤에만 부른다: REA 가 스스로 낸 계획(dry-run)을 먼저 받아 보여 주고, 이어서 설치한다.
+// 돌려주는 것: { ok, runner } (ok 가 false 면 가벼운 모드로 계속한다)
+async function applyRea(rp) {
+  if (!rp.args) { say(T.dim(`  이번 해부에 공식 패키지 ${REA_PACKAGE} 를 npx 로 씁니다.`)); return { ok: true, runner: rp.installer }; }
+  const later = `나중에: ${REA_HOW}`;
+  say(T.dim(`REA 의 설치 계획을 받아 오는 중입니다 (npm 의 공식 패키지 ${REA_PACKAGE})`));
+  const p = await runRea(rp.installer, [...rp.args, '--dry-run', '--json'], { timeoutMs: 300000 });
+  const pj = p.code === 0 ? parseJson(p.stdout) : null;
+  if (!pj || pj.status !== 'planned' || !Array.isArray(pj.plannedActions)) { say(`  ${T.gold('REA 는 건너뜁니다')}  REA 의 설치 계획을 받지 못했습니다${p.timedOut ? ' (시간 초과)' : ''}. 가벼운 모드로 계속합니다. ${later}`); return { ok: false }; }
+  if (pj.plannedActions.length) {
+    const w = Math.max(...pj.plannedActions.map((a) => T.width(String(a.label || a.kind)))) + 2;
+    for (const a of pj.plannedActions) say(`  ${T.pad(String(a.label || a.kind), w)}${tilde(String(a.target || ''))}  ${T.gold(REA_ACT[a.kind] || String(a.kind))}`);
+  }
+  say(T.dim(`REA 를 설치하는 중입니다 (${REA_PACKAGE} setup)`));
+  const r = await runRea(rp.installer, [...rp.args, '--yes', '--json'], { timeoutMs: 600000 });
+  const j = parseJson(r.stdout);
+  if (r.code !== 0 || !j) { say(`  ${T.gold('REA 설치 실패')}  ${r.timedOut ? '시간 초과' : 'REA setup 이 끝나지 않았습니다'}. 가벼운 모드로 계속합니다. ${later}`); return { ok: false }; }
+  // REA 6.9.0 은 한 일을 "configured_<에이전트>", "installed_skill" 같은 문자열로 돌려준다 (옛 모양인 { kind } 도 읽는다).
+  const applied = (Array.isArray(j.appliedActions) ? j.appliedActions : []).map((a) => (typeof a === 'string' ? a : String((a && (a.kind || a.id)) || '')));
+  const nc = applied.filter((a) => /^configure/.test(a)).length;
+  const ns = applied.some((a) => /^install(ed)?_skill/.test(a));
+  say(`  ${T.gold('REA 설치')}  에이전트 연결 ${nc}곳${ns ? ', REA 스킬 설치' : ''}${j.status ? T.dim(`  (${j.status})`) : ''}`);
+  return { ok: true, runner: rp.installer };
+}
 
 async function install(o) {
   banner(o.dryRun ? 'dry-run: 아무것도 바꾸지 않습니다' : 'CONNECT AI LAB');
@@ -189,12 +270,13 @@ async function install(o) {
   const { targets, unknown, known } = planTargets({ agents: o.agents, dirs: o.dirs, project: o.project });
   if (unknown.length) { say(`모르는 에이전트: ${unknown.join(', ')}  (${known.join(', ')} 중에서)`); process.exitCode = 2; return; }
   let installed = 0;
+  let reaInstalled = false;
   if (!targets.length) {
     say('이 컴퓨터에서 에이전트 폴더를 찾지 못했습니다 (Claude Code, Codex, Gemini CLI, Cursor, Antigravity).');
     say(`직접 고르기:  ${NPX} --agent claude   또는   --dir <스킬 폴더>`);
   } else {
     const plan = planInstall(targets, { force: o.force, version: PKG.version });
-    const st = await reaState();
+    const rp = await planRea(o, targets);
     const files = countFiles(SKILL_SRC) + countFiles(VIEWER_SRC);
     const w = Math.max(...plan.map((p) => T.width(p.label))) + 2;
     const w2 = Math.max(...plan.map((p) => T.width(tilde(p.dest)))) + 2;
@@ -204,26 +286,33 @@ async function install(o) {
       say(`  ${T.ivory(T.pad(p.label, w))}${T.pad(tilde(p.dest), w2)}${p.action === 'skip' || p.action === 'blocked' ? T.dim(label) : T.gold(label)}${p.why ? T.dim(`  ${p.why}`) : ''}`);
     }
     const todo = plan.filter((p) => !['skip', 'blocked'].includes(p.action));
-    say(T.dim(`  위 폴더에 reversebusiness 스킬 파일 ${files}개를 복사합니다. 에이전트의 설정 파일은 건드리지 않으며 외부 패키지를 내려받지 않습니다.`));
-    if (st.state === 'present') say(T.dim(`  로컬 REA(${st.version || '설치됨'}) 감지됨 — 주소를 읽을 때 정밀 모드로 함께 씁니다.`));
+    say(T.dim(`  위 폴더에 reversebusiness 스킬 파일 ${files}개를 복사합니다. 이 복사는 에이전트의 설정 파일을 건드리지 않습니다.`));
     say();
-    if (!todo.length) { say('새로 설치할 곳이 없습니다.'); }
-    else if (o.dryRun) { say(`실제로 설치하려면 --dry-run 을 빼고 실행하세요:  ${NPX} --yes`); }
+    showReaPlan(rp);
+    say();
+    const withRea = rp.state === 'install';
+    if (!todo.length && !withRea) { say('새로 설치할 곳이 없습니다.'); }
+    else if (o.dryRun) { say(`실제로 설치하려면 --dry-run 을 빼고 실행하세요:  ${NPX} --yes${withRea ? T.dim('   (REA 없이: --no-rea)') : ''}`); }
     else {
-      let go = o.yes;
-      if (!go && process.stdin.isTTY && process.stdout.isTTY) {
-        const a = await ask(`${T.gold('?')} 설치할까요? [Y/n] `);
-        go = a === '' || a === 'y' || a === 'yes' || a === 'ㅛ' || a === '예' || a === '네';
-        if (!go) say('설치하지 않았습니다.');
+      let go = !todo.length || o.yes;
+      if (!go && interactive()) {
+        go = isYes(await ask(`${T.gold('?')} reversebusiness 스킬을 설치할까요? [Y/n] `));
+        if (!go) say('스킬은 설치하지 않았습니다.');
       } else if (!go) {
-        say(`확인이 필요합니다. 설치하려면 --yes 를 붙여 다시 실행하세요:  ${NPX} --yes`);
+        say(`확인이 필요합니다. 설치하려면 --yes 를 붙여 다시 실행하세요:  ${NPX} --yes${withRea ? T.dim('   (REA 없이: --no-rea)') : ''}`);
       }
-      if (go) {
+      if (go && todo.length) {
         const done = applyInstall(plan, { skillSrc: SKILL_SRC, viewerSrc: VIEWER_SRC, version: PKG.version, pkgName: PKG.name });
         for (const d of done) {
           if (d.backup) say(`  ${T.dim('백업')}  ${tilde(d.backup)}`);
           if (d.files) { say(`  ${T.gold('설치')}  ${T.pad(d.label, w)}${tilde(d.dest)}  ${T.dim(`파일 ${d.files}개`)}`); installed += 1; }
         }
+      }
+      // REA 는 따로 묻는다. 물어볼 사람이 없는 터미널에서 --yes 가 없으면 설치하지 않는다 (위에서 바뀔 것만 보여 주었다).
+      if (withRea && (go || interactive())) {
+        const c = await confirmRea(o);
+        if (c === 'yes') reaInstalled = (await applyRea(rp)).ok;
+        else if (c === 'no') say(`REA 는 설치하지 않았습니다. 가벼운 모드로 동작합니다. 나중에 정밀 모드로: ${REA_HOW}`);
       }
     }
   }
@@ -231,7 +320,7 @@ async function install(o) {
   say();
   await showDemo(o);
   say();
-  if (installed) {
+  if (installed || reaInstalled) {
     say(`${T.bold('이제 에이전트를 새로 시작하고 이렇게 말하세요')}`);
     say(`  ${T.hi('"reversebusiness 로 <궁금한 사업의 주소> 를 해부해 줘"')}`);
   } else {
@@ -255,6 +344,7 @@ function remove(o) {
   if (!o.dryRun) applyRemove(plan);
   say();
   say(T.dim('백업 폴더(reversebusiness.backup-...)가 있다면 그대로 남아 있습니다.'));
+  say(T.dim(`REA 는 지우지 않았습니다 (별개의 도구). REA 까지 지우려면: npx -y ${REA_PACKAGE}@latest uninstall`));
 }
 
 async function view(o) {
@@ -339,6 +429,32 @@ async function completeDissect(o, ag, dir, checkReport) {
   return { filled, mineDir, detected };
 }
 
+// rebiz <주소> 에서 REA 가 없을 때: 바뀔 것을 보여 주고 확인을 받은 뒤에만 설치한다. 실패하거나 거절하면 가벼운 모드로 계속한다.
+// 돌려주는 것: { runner (이번 해부에 쓸 REA, 없으면 undefined), note (가벼운 모드인 까닭과 정밀 모드로 가는 방법), stop (dry-run) }
+async function offerReaForDissect(o) {
+  if (o.light) return {};
+  const rp = await planRea(o, planTargets({}).targets, { forDissect: true });
+  const later = `다음에 rebiz <주소> 를 돌릴 때 REA 설치에 Y 로 답하거나, 직접 ${REA_HOW}`;
+  if (rp.state === 'present') return {};
+  if (rp.state === 'skip') return { note: `REA 설치 제안을 건너뛰었습니다 (--no-rea). 정밀 모드로: ${later}` };
+  if (rp.state === 'node-too-old') return { note: `REA 는 ${REA_NODE}이 필요한데 지금 Node 는 ${currentNode()} 입니다. Node 를 올리면 정밀 모드로 읽을 수 있습니다.` };
+  // 정밀 모드는 브라우저 위에서 REA 를 쓴다. 브라우저 없이 REA 만 받아 봐야 쓸 데가 없으니 묻지 않는다.
+  const { findBrowser } = await tool('render.mjs');
+  if (o.render === 'off' || !findBrowser()) return {};
+  showReaPlan(rp);
+  say();
+  const c = await confirmRea(o);
+  if (c === 'dry-run') return { stop: true };
+  if (c === 'yes') {
+    const a = await applyRea(rp);
+    say();
+    return a.ok ? { runner: a.runner } : { note: `REA 설치가 끝나지 않아 가벼운 모드로 읽었습니다. 정밀 모드로: ${later}` };
+  }
+  if (c === 'need-yes') say(`물어볼 사람이 없는 터미널이라 REA 는 설치하지 않았습니다. 설치하고 읽으려면 --yes 를 붙이세요 (REA 없이: --no-rea).`);
+  say();
+  return { note: `REA 를 설치하지 않아 가벼운 모드로 읽었습니다. 정밀 모드로: ${later}` };
+}
+
 async function dissectUrl(o) {
   const ag = agentArg(o);
   if (!ag) return;
@@ -351,12 +467,14 @@ async function dissectUrl(o) {
   say(T.dim('공개 페이지만 읽습니다: robots.txt 먼저, 최대 5장, 요청 사이 2초, 로그인과 폼 제출 없음, 쿠키 저장 없음.'));
   if (o.relation === 'own') say(T.dim('내 것으로 적습니다 (--own). 읽는 방식과 한도는 같습니다.'));
   say();
+  const offer = await offerReaForDissect(o);
+  if (o.dryRun || offer.stop) { say(T.dim('dry-run: 아무것도 내려받거나 읽지 않고 여기서 멈춥니다.')); return; }
   const started = Date.now();
   let dir;
   try { dir = path.resolve(o.out || outDirFor(input)); } catch (e) { say(`${T.gold('멈춤')}  ${e.message}`); process.exitCode = 3; return; }
   let c;
   try {
-    c = await collect(input, { version: PKG.version, maxPages: o.pages, render: o.render, mode: o.light ? 'light' : 'auto', relation: o.relation, evidenceDir: path.join(dir, 'evidence'), onStep: (s) => say(`  ${T.dim('·')} ${s}`) });
+    c = await collect(input, { version: PKG.version, maxPages: o.pages, render: o.render, mode: o.light ? 'light' : 'auto', ...(offer.runner ? { rea: offer.runner } : {}), relation: o.relation, evidenceDir: path.join(dir, 'evidence'), onStep: (s) => say(`  ${T.dim('·')} ${s}`) });
   } catch (e) {
     say(`${T.gold('멈춤')}  ${e.message}`);
     process.exitCode = e instanceof Stop ? 3 : 1;
@@ -380,6 +498,7 @@ async function dissectUrl(o) {
   const DEPTH = { surface: '겉 읽기', flow: '흐름 읽기', code: '속 읽기' };
   const STATE = { done: '읽음', partial: '일부만', skipped: '안 함', blocked: '약관이 막음', failed: '실패' };
   say(`${T.dim('깊이')}    ${c.deep.mode === 'precise' ? '정밀 모드 (REA)' : '가벼운 모드'}`);
+  if (c.deep.mode !== 'precise' && offer.note) say(`          ${T.dim(offer.note)}`);
   for (const st of built.report.meta.depth.steps) say(`          ${T.pad(DEPTH[st.key], 10)}${st.state === 'done' || st.state === 'partial' ? T.gold(T.pad(STATE[st.state], 12)) : T.dim(T.pad(STATE[st.state], 12))}${T.dim(st.note || '')}`);
   if (c.render.mode === 'used') say(`${T.dim('그려 읽기')} ${c.render.browser} 임시 프로필로 ${c.render.pages}장. 브라우저를 끄고 프로필을 지웠습니다${c.render.blocked ? `. 브라우저 안에서 보내지 않은 요청 ${c.render.blocked}개` : ''}.`);
   else if (c.render.mode === 'failed') say(`${T.dim('그려 읽기')} 실패: ${c.render.error || ''} 받은 HTML 만 읽었습니다.`);
