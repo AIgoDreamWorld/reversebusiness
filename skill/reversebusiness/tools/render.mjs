@@ -235,11 +235,74 @@ const PICK = (max) => `(() => {
 })()`;
 const CLICK = (i) => `(() => { const p = (window.__rebizPicks || [])[${i}]; if (!p || !p.el.isConnected) return false; p.el.click(); return true; })()`;
 
-// 브라우저만 띄운다: 임시 프로필, 헤드리스, 파이프 연결. close() 가 브라우저를 끄고 임시 프로필을 지운다.
+// 창 띄우기 여부: 명시값 > REBIZ_HEADLESS/CI 환경 > 디스플레이 없는 Linux 면 헤드리스, 데스크톱에서는 기본적으로 실제 Chrome 창을 띄운다.
+export function shouldBeHeadless({ headless, env = process.env, platform = process.platform } = {}) {
+  if (typeof headless === 'boolean') return headless;
+  if (env.REBIZ_HEADLESS === '1' || env.CI === 'true' || env.GITHUB_ACTIONS === 'true') return true;
+  if (platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) return true;
+  return false;
+}
+
+const VISUAL_HUD = (title, sub = '') => `(() => {
+  if (!document.body) return;
+  let st = document.getElementById('rebiz-hud-style');
+  if (!st) {
+    st = document.createElement('style');
+    st.id = 'rebiz-hud-style';
+    st.textContent = \`
+      @keyframes rebizPulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.45; } }
+      #rebiz-hud { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; pointer-events: none; display: flex; align-items: center; gap: 11px; padding: 11px 16px; border-radius: 12px; background: rgba(12,13,18,0.92); color: #f3efe6; border: 1px solid rgba(228,186,117,0.48); box-shadow: 0 12px 32px rgba(0,0,0,0.45); font: 500 13px/1.35 ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif; backdrop-filter: blur(10px); max-width: 360px; }
+      #rebiz-hud .rebiz-dot { width: 9px; height: 9px; border-radius: 50%; background: #e4ba75; flex: 0 0 auto; animation: rebizPulse 1.2s ease-in-out infinite; }
+      #rebiz-hud .rebiz-kicker { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #e4ba75; font-weight: 700; }
+      #rebiz-hud .rebiz-msg { color: #f3efe6; font-size: 13px; margin-top: 2px; }
+      [data-rebiz-ring] { outline: 2px solid rgba(228,186,117,0.9) !important; outline-offset: 3px !important; box-shadow: 0 0 0 6px rgba(228,186,117,0.16) !important; transition: box-shadow 0.25s ease, outline-color 0.25s ease !important; }
+    \`;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  let hud = document.getElementById('rebiz-hud');
+  if (!hud) {
+    hud = document.createElement('div');
+    hud.id = 'rebiz-hud';
+    hud.innerHTML = '<span class="rebiz-dot"></span><div><div class="rebiz-kicker"></div><div class="rebiz-msg"></div></div>';
+    document.body.appendChild(hud);
+  }
+  hud.querySelector('.rebiz-kicker').textContent = ${JSON.stringify(String(title || 'reversebusiness'))};
+  hud.querySelector('.rebiz-msg').textContent = ${JSON.stringify(String(sub || ''))};
+})()`;
+
+const VISUAL_SCAN = `(() => {
+  const nodes = [...document.querySelectorAll('header, main > section, section, article, footer')].filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.height >= 48 && r.width >= innerWidth * 0.35;
+  }).slice(0, 7);
+  nodes.forEach((el, idx) => setTimeout(() => { el.setAttribute('data-rebiz-ring', '1'); }, idx * 90));
+  window.scrollTo({ top: Math.min(Math.max(0, document.documentElement.scrollHeight - innerHeight), Math.round(innerHeight * 0.75)), behavior: 'smooth' });
+  setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, 460);
+  return nodes.length;
+})()`;
+
+const VISUAL_MARK_CLICK = (i) => `(() => {
+  document.querySelectorAll('[data-rebiz-ring]').forEach((n) => n.removeAttribute('data-rebiz-ring'));
+  const p = (window.__rebizPicks || [])[${i}];
+  if (!p || !p.el || !p.el.isConnected) return false;
+  p.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  p.el.setAttribute('data-rebiz-ring', '1');
+  return true;
+})()`;
+
+const VISUAL_CLEANUP = `(() => {
+  document.querySelectorAll('[data-rebiz-ring]').forEach((n) => n.removeAttribute('data-rebiz-ring'));
+  const hud = document.getElementById('rebiz-hud'); if (hud) hud.remove();
+  const st = document.getElementById('rebiz-hud-style'); if (st) st.remove();
+  window.scrollTo(0, 0);
+})()`;
+
+// 브라우저만 띄운다: 임시 프로필, 헤드리스(또는 데스크톱 라이브 창), 연결. close() 가 브라우저를 끄고 임시 프로필을 지운다.
 // 그려 읽기(openRenderer)와 영상 뽑기(video.mjs)가 함께 쓴다.
-export async function launchBrowser({ browser = findBrowser(), limits = {}, debugPort = false, args = [] } = {}) {
+export async function launchBrowser({ browser = findBrowser(), limits = {}, debugPort = false, headless, args = [] } = {}) {
   if (!browser) throw new Error('브라우저를 찾지 못했어요');
   const L = { ...RENDER_LIMITS, ...limits };
+  const isHeadless = shouldBeHeadless({ headless });
   const rawProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'rebiz-render-'));
   const profile = process.platform === 'win32' ? (fs.realpathSync.native ? fs.realpathSync.native(rawProfile) : fs.realpathSync(rawProfile)) : rawProfile;
   const childEnv = { ...process.env };
@@ -250,15 +313,15 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
   const usePipe = process.platform !== 'win32';
   const needPort = !usePipe || debugPort;
   const child = spawn(browser.path, [
-    '--headless=new',
+    ...(isHeadless ? ['--headless=new'] : ['--new-window', '--window-position=80,60']),
     ...(usePipe ? ['--remote-debugging-pipe'] : []),
     ...(needPort ? ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] : []),
-    `--user-data-dir=${profile}`, `--window-size=${L.width},${L.height}`,
+    `--user-data-dir=${profile}`, `--window-size=${isHeadless ? `${L.width},${L.height}` : '1360,900'}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--disable-background-networking', '--disable-component-update',
-    '--disable-default-apps', '--disable-dev-shm-usage', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', '--hide-scrollbars',
+    '--disable-default-apps', '--disable-dev-shm-usage', '--disable-client-side-phishing-detection', '--metrics-recording-only', '--no-pings', '--mute-audio', ...(isHeadless ? ['--hide-scrollbars'] : []),
     ...(process.platform === 'win32' ? ['--disable-gpu'] : []),
     '--password-store=basic', '--use-mock-keychain', '--disable-features=Translate,MediaRouter,OptimizationHints,AutofillServerCommunication', ...args, 'about:blank',
-  ], { env: childEnv, stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  ], { env: childEnv, stdio: usePipe ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'], windowsHide: isHeadless });
   let exited = false, exitCode = null, errLog = '';
   if (!usePipe && child.stderr) {
     child.stderr.setEncoding('utf8');
@@ -319,18 +382,18 @@ export async function launchBrowser({ browser = findBrowser(), limits = {}, debu
     }
   } catch (e) { await close(); throw e; }
 
-  return { cdp, child, profile, close, browser, limits: L };
+  return { cdp, child, profile, close, browser, limits: L, headless: isHeadless };
 }
 
 // 브라우저를 띄운다. open(url, { allow }) 로 한 장을 열어 읽고, 끝나면 close() 를 꼭 부른다.
 // debugPort 를 켜면 내 컴퓨터 안(127.0.0.1)에서만 닿는 디버깅 주소도 함께 연다 (REA 가 붙어서 읽을 때 쓴다).
-export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {}, debugPort = false } = {}) {
+export async function openRenderer({ browser = findBrowser(), version = '0', repo = '', limits = {}, debugPort = false, headless } = {}) {
   if (!browser) throw new Error('브라우저를 찾지 못했어요');
   let started = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let launched = null;
     try {
-      launched = await launchBrowser({ browser, limits, debugPort });
+      launched = await launchBrowser({ browser, limits, debugPort, headless });
       const { cdp, profile, limits: L } = launched;
       const v = await withTimeout(cdp.send('Browser.getVersion'), L.startMs, '브라우저 시작');
       // 누가 읽는지 숨기지 않는다: 헤드리스 브라우저라는 것과 이 도구의 이름을 함께 밝힌다.
@@ -354,7 +417,7 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       await sleep(200);
     }
   }
-  const { cdp, child, profile, close, limits: L, ua, endpoint } = started;
+  const { cdp, child, profile, close, limits: L, ua, endpoint, headless: isHeadless } = started;
 
   // 한 장을 연다. 돌려주는 것으로 읽고(read), 펼치고(flow), 닫는다(close).
   async function open(url, { allow = async () => ({ ok: true }), keepScripts = false } = {}) {
@@ -440,7 +503,8 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       await S('Page.enable');
       await S('Network.enable');
       await S('Emulation.setUserAgentOverride', { userAgent: ua });
-      await S('Emulation.setDeviceMetricsOverride', { width: L.width, height: L.height, deviceScaleFactor: 1, mobile: false });
+      if (isHeadless) await S('Emulation.setDeviceMetricsOverride', { width: L.width, height: L.height, deviceScaleFactor: 1, mobile: false });
+      else try { await S('Page.bringToFront'); } catch { /* 창 포커스 실패는 무시 */ }
       mainFrame = (await S('Page.getFrameTree')).frameTree.frame.id;
       try { await S('Emulation.setDocumentCookieDisabled', { disabled: true }); } catch { /* 옛 브라우저 */ }
       await S('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
@@ -450,20 +514,35 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
       while (!loaded && Date.now() - started < L.navMs && !stats.mainBlocked) await sleep(100);
       timedOut = !loaded && !stats.mainBlocked;
       if (!stats.mainBlocked || !first) await idle(L.settleMs);
-      // 아래쪽이 화면에 들어와야 그려지는 구역이 있으므로, 누르거나 굴리지 않고 창만 길게 늘인다.
-      try {
-        const h = (await evaluate('Math.max(document.documentElement ? document.documentElement.scrollHeight : 0, document.body ? document.body.scrollHeight : 0)')) || 0;
-        if (h > L.height) { await S('Emulation.setDeviceMetricsOverride', { width: L.width, height: Math.min(h, L.maxHeight), deviceScaleFactor: 1, mobile: false }); lastActivity = Date.now(); await idle(L.growMs); }
-      } catch { /* 길이를 못 재면 그대로 읽는다 */ }
+      if (isHeadless) {
+        // 아래쪽이 화면에 들어와야 그려지는 구역이 있으므로, 누르거나 굴리지 않고 창만 길게 늘인다.
+        try {
+          const h = (await evaluate('Math.max(document.documentElement ? document.documentElement.scrollHeight : 0, document.body ? document.body.scrollHeight : 0)')) || 0;
+          if (h > L.height) { await S('Emulation.setDeviceMetricsOverride', { width: L.width, height: Math.min(h, L.maxHeight), deviceScaleFactor: 1, mobile: false }); lastActivity = Date.now(); await idle(L.growMs); }
+        } catch { /* 길이를 못 재면 그대로 읽는다 */ }
+      } else if (!stats.mainBlocked) {
+        try {
+          await evaluate(VISUAL_HUD('reversebusiness · Live Dissection', `Scanning ${new URL(url).hostname}…`), 2500);
+          await evaluate(VISUAL_SCAN, 2500);
+          await sleep(950);
+        } catch { /* 오버레이 표시 실패는 읽기에 영향 없음 */ }
+      }
     } catch (e) { await closePage(); throw e; }
+
+    const showHud = async (title, sub = '') => {
+      if (isHeadless) return;
+      try { await evaluate(VISUAL_HUD(title, sub), 2000); } catch { /* 무시 */ }
+    };
 
     return {
       targetId, stats, userAgent: ua,
       get status() { return stats.status; },
       get timedOut() { return timedOut; },
       get ms() { return Date.now() - started; },
+      hud: showHud,
       // 그려진 화면의 글자, 구조, 구역의 위치와 크기
       async read() {
+        if (!isHeadless) try { await evaluate(VISUAL_CLEANUP, 2000); } catch { /* 무시 */ }
         let page = { html: '', blocks: [], docH: 0, docW: L.width, url };
         try { const v = await evaluate(EXTRACT); if (v) page = v; } catch { /* 읽지 못하면 빈 결과 */ }
         return page;
@@ -475,8 +554,14 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
         let kinds = [];
         let before = '';
         try { before = await evaluate('location.pathname'); kinds = (await evaluate(PICK(Math.max(0, Math.min(max, 12))))) || []; } catch { return out; }
+        if (!isHeadless && kinds.length) await showHud('reversebusiness · Flow Probe', `Checking ${kinds.length} expandable element(s)…`);
         for (let i = 0; i < kinds.length; i += 1) {
           try {
+            if (!isHeadless) {
+              await showHud('reversebusiness · Flow Probe', `Expanding ${kinds[i]} (${i + 1}/${kinds.length})…`);
+              await evaluate(VISUAL_MARK_CLICK(i), 2000);
+              await sleep(240);
+            }
             if (!(await evaluate(CLICK(i), 3000))) continue;
             out.clicks += 1; out.kinds[kinds[i]] = (out.kinds[kinds[i]] || 0) + 1;
             lastActivity = Date.now();
@@ -484,6 +569,7 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
             if ((await evaluate('location.pathname')) !== before) { out.moved = true; break; }
           } catch { break; }
         }
+        if (!isHeadless) try { await evaluate(VISUAL_CLEANUP, 2000); } catch { /* 무시 */ }
         return out;
       },
       // 요청이 나가려던 호스트 이름과 종류. 본문, 쿠키, 주소의 뒷부분은 담지 않는다.
@@ -516,5 +602,5 @@ export async function openRenderer({ browser = findBrowser(), version = '0', rep
     } finally { await pg.close(); }
   }
 
-  return { open, render, close, browser, userAgent: ua, profile, pid: child.pid, endpoint };
+  return { open, render, close, browser, userAgent: ua, profile, pid: child.pid, endpoint, headless: isHeadless };
 }

@@ -1,8 +1,19 @@
 # AGENTS.md
 
-이 저장소에서 일하거나 이 도구를 쓰는 AI 에이전트가 먼저 읽는 짧은 안내입니다.
+Guide for AI coding agents working on this repo or using the `reversebusiness` skill (`English` + `한국어`).
 
-## 이 도구가 하는 일
+## Quick English Summary (Always Complete End-to-End)
+
+**Never stop at the raw collector draft (`unknown` cells) — even if the user only pastes `npx github:wonseokjung/reversebusiness <URL>` in chat.** Complete the full flow in the same turn (and reply in the user's language, English or Korean):
+
+1. Read `skill/reversebusiness/SKILL.md` first.
+2. Run the collector to gather grounded evidence without opening an unfinished view first:
+   `npx github:wonseokjung/reversebusiness <URL> --no-open --no-fill [--headless]` (add `--own` only for the user's own site).
+3. Read `report.json`, `source.json`, and `evidence/` (if present), fill all interpretive fields (`meta.one_line`, `sections.money.customer`, `problem`, `sections.flow.steps` including `first_value` and `return`, `sections.map.screens[].purpose`, `sections.unknowns`), set `meta.draft = false`, and write cell 6 (`sections.my_version`) unless the user explicitly requested analysis-only.
+4. Run `rebiz check report.json` (or `--dissect-only` when analysis-only), then `rebiz build report.json --out ./my-version --force` (which also runs `clone-check`).
+5. Rebuild & open the finished view: `rebiz view report.json --mine ./my-version --out ./report.html` (pass `--lang en` when working in English, `--lang ko` for Korean).
+
+## 이 도구가 하는 일 (Korean)
 
 reversebusiness 는 사업 웹사이트 주소 하나를 받아 그 사업을 해부합니다. 읽기, 해부(6칸 `report.json`), 내 버전 만들기, 겹침 검사의 네 단계입니다. 원본을 복제하지 않고 구조만 배웁니다.
 

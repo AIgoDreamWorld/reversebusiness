@@ -370,7 +370,7 @@ export function skeletonFromRects(root, rects) {
 }
 
 // ---------- 모으기 ----------
-export async function collect(input, { version = '0', maxPages = LIMITS.maxPages, fetchImpl, sleep, now, limits, onStep = () => {}, render = 'auto', browser, mode = 'auto', rea, relation = 'third-party', evidenceDir = '', externalRequests = 'allow' } = {}) {
+export async function collect(input, { version = '0', maxPages = LIMITS.maxPages, fetchImpl, sleep, now, limits, onStep = () => {}, render = 'auto', browser, mode = 'auto', rea, relation = 'third-party', evidenceDir = '', externalRequests = 'allow', headless } = {}) {
   const start = normalizeUrl(input);
   const f = createFetcher({ version, fetchImpl, sleep, now, limits });
   const pagesMax = Math.min(Math.max(1, maxPages), LIMITS.maxPages);
@@ -503,6 +503,7 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
   async function reaSurface(tab) {
     const d = result.deep.surface;
     if (!renderer.endpoint) { d.note = 'REA 가 붙을 디버깅 주소를 열지 못해 우리 읽기만 썼다'; return; }
+    if (tab.hud) await tab.hud('reversebusiness · REA Surface', 'Reading visible DOM & storage keys…');
     onStep('겉 읽기: REA inspect-web-page (그려진 화면의 글, 구조, 저장소 키 이름)');
     const r = await runRea(reaRun, ['inspect-web-page', renderer.endpoint, tab.targetId, '--allowed-origins', start.origin, '--observation-ms', '1000', '--include-accessibility-text', '--include-storage-keys', '--format', 'json'], { timeoutMs: f.limits.reaInspectMs });
     if (r.code !== 0 || r.timedOut) { d.note = r.timedOut ? 'REA 겉 읽기가 시간 한도를 넘어 우리 읽기만 썼다' : 'REA 겉 읽기가 실패해 우리 읽기만 썼다'; d.rea = 'failed'; return; }
@@ -546,6 +547,7 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
       if (t.forbids) { d.state = 'blocked'; d.note = `이용약관에 코드 분석을 금지하는 말("${t.word}")이 있어 속 읽기는 하지 않았다`; return; }
       d.termsNote = '이용약관에서 코드 분석을 금지하는 말을 찾지 못했다 (낱말로 찾아본 것이며 법률 검토가 아니다)';
     }
+    if (tab.hud) await tab.hud('reversebusiness · Code Scan', 'Inspecting downloaded bundle routes & providers…');
     onStep('속 읽기: 이미 내려온 스크립트에서 화면 경로 이름과 결제 모듈 이름을 찾습니다 (찾은 주소는 부르지 않습니다)');
     let scan = { files: 0, bytes: 0, routes: [], endpoints: [], payments: [], prices: [], plans: [] };
     try { scan = scanScripts(await tab.scripts()); } catch { /* 스크립트를 못 읽음 */ }
@@ -580,7 +582,7 @@ export async function collect(input, { version = '0', maxPages = LIMITS.maxPages
       else {
         try {
           onStep(precise ? `정밀 모드: REA 를 찾았습니다. ${found.name} 을(를) 임시 프로필로 잠깐 띄워 세 깊이로 읽습니다.` : `받은 HTML 의 글이 ${main.textLength}자로 얇아요. ${found.name} 을(를) 임시 프로필로 잠깐 띄워 그려진 화면을 읽습니다.`);
-          renderer = await openRenderer({ browser: found, version, repo: REPO_URL, debugPort: precise });
+          renderer = await openRenderer({ browser: found, version, repo: REPO_URL, debugPort: precise, headless });
           result.render.browser = found.name;
           const drawn = await rendered(new URL(main.url), 'main', { keep: precise });
           drawn.plainTextLength = main.textLength;

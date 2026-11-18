@@ -74,7 +74,7 @@ export function buildView(reportPath, outPath, { mine = '', lang = '' } = {}) {
   const css = fs.readFileSync(path.join(dir, 'viewer.css'), 'utf8');
   const data = { report };
   if (mine) data.mine = loadMine(mine);
-  if (lang === 'en') data.lang = 'en';
+  if (lang === 'en' || lang === 'ko') data.lang = lang;
   html = html.replace(/<link rel="stylesheet" href="viewer\.css"\s*\/?>/, () => `<style>\n${css}\n</style>`);
   html = html.replace(/<script src="viewer\.js"><\/script>/, () => `<script>window.__REBIZ__ = ${safeJson(data)};</script>\n<script src="viewer.js"></script>`);
   html = html.replace(/<script src="(viewer|stage|sections)\.js"><\/script>/g, (m, name) => `<script>\n${closeSafe(fs.readFileSync(path.join(dir, `${name}.js`), 'utf8'))}\n</script>`);

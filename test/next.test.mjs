@@ -10,7 +10,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startSite, fakeClock } from './fixtures/server.mjs';
 import { collect, buildDraftFromPages, writeOutputs } from '../skill/reversebusiness/tools/collect.mjs';
-import { findBrowser } from '../skill/reversebusiness/tools/render.mjs';
+import { findBrowser, shouldBeHeadless } from '../skill/reversebusiness/tools/render.mjs';
+import { pickLang } from '../lib/lang.mjs';
 import { renderSite, planBlocks } from '../skill/reversebusiness/tools/make-site.mjs';
 import { comparePlan, isLocalUrl, makePlan, PlanStop } from '../skill/reversebusiness/tools/apply-plan.mjs';
 import { probeVideo } from '../skill/reversebusiness/tools/video.mjs';
@@ -672,6 +673,62 @@ test('dissect <주소> 는 --agent 로 한 번에 해부, 명세, 내 버전 출
     assert.ok(fs.existsSync(path.join(outDir, 'my-version', 'index.html')));
     const viewHtml = read(outDir, 'report.html');
     assert.match(viewHtml, /골목 화분 구독 \(가상의 예시\)/);
+  } finally {
+    await site.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('pickLang 과 shouldBeHeadless: 언어 자동 감지 및 데스크톱 라이브 창 기본값', () => {
+  assert.equal(pickLang('en', { LANG: 'ko_KR.UTF-8' }), 'en');
+  assert.equal(pickLang('ko', { LANG: 'en_US.UTF-8' }), 'ko');
+  assert.equal(pickLang('', { REBIZ_LANG: 'en', LANG: 'ko_KR.UTF-8' }), 'en');
+  assert.equal(pickLang('', { LANG: 'en_US.UTF-8' }), 'en');
+  assert.equal(pickLang('', { LANG: 'ko_KR.UTF-8' }), 'ko');
+
+  assert.equal(shouldBeHeadless({ headless: false, env: { CI: 'true', REBIZ_HEADLESS: '1' }, platform: 'linux' }), false);
+  assert.equal(shouldBeHeadless({ headless: true, env: {}, platform: 'darwin' }), true);
+  assert.equal(shouldBeHeadless({ env: { REBIZ_HEADLESS: '1' }, platform: 'darwin' }), true);
+  assert.equal(shouldBeHeadless({ env: { CI: 'true' }, platform: 'darwin' }), true);
+  assert.equal(shouldBeHeadless({ env: {}, platform: 'darwin' }), false);
+  assert.equal(shouldBeHeadless({ env: {}, platform: 'win32' }), false);
+  assert.equal(shouldBeHeadless({ env: {}, platform: 'linux' }), true);
+  assert.equal(shouldBeHeadless({ env: { DISPLAY: ':0' }, platform: 'linux' }), false);
+});
+
+test('--lang en: 영문 도움말과 영문 해부 화면을 만든다', () => {
+  const dir = withReport();
+  try {
+    const h = run(dir, ['--help', '--lang', 'en'], { env: { REBIZ_LANG: '' } });
+    assert.equal(h.status, 0, h.out);
+    assert.match(h.out, /Dissect any business from one URL/);
+    assert.match(h.out, /--headless/);
+
+    const outHtml = path.join(dir, 'view-en.html');
+    const v = run(dir, ['view', 'report.json', '--out', outHtml, '--lang', 'en', '--no-open'], { env: { REBIZ_LANG: '' } });
+    assert.equal(v.status, 0, v.out);
+    assert.match(v.out, /Report view/);
+    assert.match(v.out, /Next {2}rebiz video report\.json/);
+    assert.match(read(dir, 'view-en.html'), /"lang":"en"/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('dissect <주소>: 에이전트가 리포트를 고치지 못하고 실패해도 검증 오류를 도배하지 않고 초안을 연다', async () => {
+  const site = await startSite({
+    routes: {
+      '/': (_req, _res, html) => html('<!doctype html><html><head><title>작은 도구</title></head><body><h1>빠른 작업</h1><p>월 19,000원</p></body></html>'),
+    },
+  });
+  const dir = tmp('rebiz-dissect-fail-');
+  const outDir = path.join(dir, 'out');
+  try {
+    const res = await runAsync(dir, [site.origin, '--agent', 'claude', '--yes', '--no-open', '--no-render', '--out', outDir], { agent: 'fail' });
+    assert.equal(res.status, 1, res.out);
+    assert.match(res.out, /초안 열기/);
+    assert.doesNotMatch(res.out, /오류\s+meta\.one_line/);
+    assert.doesNotMatch(res.out, /오류\s+my_version\.working_name/);
+    assert.ok(fs.existsSync(path.join(outDir, 'report.html')));
+    assert.match(res.out, /다음 {2}rebiz fill /);
   } finally {
     await site.close();
     fs.rmSync(dir, { recursive: true, force: true });

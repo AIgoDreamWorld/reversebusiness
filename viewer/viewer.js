@@ -60,12 +60,12 @@
   };
   var CELL_EN = ['MONEY', 'FLOW', 'MAP', 'TECH', 'EVIDENCE / UNKNOWN', 'MY VERSION'];
 
-  var lang = 'ko';
+  var lang = (typeof navigator !== 'undefined' && /^ko\b/i.test(navigator.language || '')) ? 'ko' : 'en';
   try {
     var q = new URLSearchParams(location.search);
-    if (q.get('lang') === 'en') lang = 'en';
+    if (q.get('lang') === 'en' || q.get('lang') === 'ko') lang = q.get('lang');
   } catch (e) {}
-  if (window.__REBIZ__ && window.__REBIZ__.lang === 'en') lang = 'en';
+  if (window.__REBIZ__ && (window.__REBIZ__.lang === 'en' || window.__REBIZ__.lang === 'ko')) lang = window.__REBIZ__.lang;
   var current = null;
 
   function t(k) { return (T[lang] && T[lang][k]) || T.ko[k] || k; }

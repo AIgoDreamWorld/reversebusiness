@@ -93,7 +93,7 @@ export async function recordVideo(reportPath, { out = '', mine = '', lang = '', 
     const page = buildView(reportPath, path.join(work, 'report.html'), { mine, lang });
     onStep(`${browser.name} 를 임시 프로필로 띄우는 중`);
     B = await launchBrowser({
-      browser, limits: { width: 1280, height: 900 },
+      browser, limits: { width: 1280, height: 900 }, headless: true,
       // 그리기가 느려지지 않게 하고, 브라우저가 바깥 이름을 아예 풀지 못하게 한다.
       args: ['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--host-resolver-rules=MAP * ~NOTFOUND'],
     });
