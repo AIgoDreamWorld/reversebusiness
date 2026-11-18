@@ -123,7 +123,7 @@ function promo(o = null) {
   T.rule();
   say(`${T.ivory('CONNECT AI LAB')} ${T.dim('·')} ${tx('모두를 위한 AI 교육', 'AI Education for Everyone', o)}`);
   say(`${T.dim(tx('유튜브', 'YouTube', o))}  https://www.youtube.com/@CONNECT-AI-LAB`);
-  say(`${T.dim(tx('강의', 'Courses', o))}    https://www.aicitybuilders.com`);
+  say(`${T.dim(tx('강의   ', 'Courses', o))}  https://www.aicitybuilders.com`);
 }
 
 function help(o = null) {
@@ -259,67 +259,75 @@ const reaCmd = (args) => `npx -y ${REA_PACKAGE}@latest ${args.join(' ')}`;
 // REA 를 함께 설치할지 정한다. 여기서는 아무것도 내려받지 않고, 아무것도 부르지 않고, 아무것도 바꾸지 않는다.
 // forDissect: rebiz <주소> 에서 부를 때. 연결할 에이전트가 없어도 이번 해부에는 쓸 수 있다.
 async function planRea(o, targets, { forDissect = false } = {}) {
-  if (o.noRea) return { state: 'skip', line: 'REA 설치 제안을 건너뜁니다 (--no-rea). REA 가 없으면 가벼운 모드로 동작합니다.' };
+  const en = isEn(o);
+  if (o.noRea) return { state: 'skip', line: en ? 'Skipping REA install offer (--no-rea). Using built-in light mode.' : 'REA 설치 제안을 건너뜁니다 (--no-rea). REA 가 없으면 가벼운 모드로 동작합니다.' };
   const st = await reaState();
   if (st.state === 'present') {
     const usable = st.runner && (st.runner.how !== 'npx' || nodeOk(currentNode()));
-    return { state: 'present', line: usable ? `REA 있음${st.version ? ` (${st.version})` : ''}. 다시 설치하지 않습니다. 주소를 넣으면 정밀 모드로 읽습니다.` : `REA 있음 (스킬 확인). 다시 설치하지 않습니다. 다만 지금 Node(${currentNode()})로는 REA 를 부를 수 없어 주소 해부는 가벼운 모드로 동작합니다. REA 는 ${REA_NODE}이 필요합니다.` };
+    return { state: 'present', line: en
+      ? (usable ? `REA ${st.version ? `(${st.version}) ` : ''}detected — leaving as-is; precise mode enabled.` : `REA skill detected (node ${currentNode()} cannot run REA, which needs Node 22.19+ / 24.11+ / 26+); falling back to light mode.`)
+      : (usable ? `REA 있음${st.version ? ` (${st.version})` : ''}. 다시 설치하지 않습니다. 주소를 넣으면 정밀 모드로 읽습니다.` : `REA 있음 (스킬 확인). 다시 설치하지 않습니다. 다만 지금 Node(${currentNode()})로는 REA 를 부를 수 없어 주소 해부는 가벼운 모드로 동작합니다. REA 는 ${REA_NODE}이 필요합니다.`) };
   }
-  if (st.state === 'node-too-old') return { state: 'node-too-old', line: `REA 는 건너뜁니다. REA 는 ${REA_NODE}이 필요한데 지금 Node 는 ${currentNode()} 입니다. Node 를 올린 뒤 ${REA_HOW} 을 실행하면 정밀 모드가 켜집니다. 그때까지는 가벼운 모드로 동작합니다.` };
+  if (st.state === 'node-too-old') return { state: 'node-too-old', line: en
+    ? `REA skipped (requires Node 22.19+ / 24.11+ / 26+; current ${currentNode()}). Continuing in light mode.`
+    : `REA 는 건너뜁니다. REA 는 ${REA_NODE}이 필요한데 지금 Node 는 ${currentNode()} 입니다. Node 를 올린 뒤 ${REA_HOW} 을 실행하면 정밀 모드가 켜집니다. 그때까지는 가벼운 모드로 동작합니다.` };
   const installer = reaInstaller();
   const keys = [...new Set(targets.flatMap((t) => t.keys || []))];
   const clients = [...new Set(keys.map((k) => REA_CLIENTS[k]).filter(Boolean))];
-  if (!clients.length && !forDissect) return { state: 'no-client', line: `REA 는 건너뜁니다. REA 를 연결할 에이전트를 고르지 않았습니다. 나중에: ${REA_HOW}` };
+  if (!clients.length && !forDissect) return { state: 'no-client', line: en ? `REA skipped (no agent selected). Install later: ${REA_HOW}` : `REA 는 건너뜁니다. REA 를 연결할 에이전트를 고르지 않았습니다. 나중에: ${REA_HOW}` };
   const args = clients.length ? ['setup', ...clients.flatMap((c) => ['--client', c])] : null;
   return { state: 'install', installer, args, clients };
 }
 const REA_ACT = { configure_client: 'REA 연결 추가', install_skill: 'REA 스킬 설치' };
+const REA_ACT_EN = { configure_client: 'configure REA', install_skill: 'install REA skill' };
 // 확인을 받기 전에 보여 주는 것: 공식 패키지 이름, 실행할 명령, 바뀔 위치.
-function showReaPlan(rp) {
-  say(T.dim(`REA (원본 ${REA_REPO.replace('https://', '')}, MIT, 별개의 도구)`));
+function showReaPlan(rp, o = null) {
+  const en = isEn(o);
+  say(T.dim(en ? `REA (upstream ${REA_REPO.replace('https://', '')}, MIT, separate tool)` : `REA (원본 ${REA_REPO.replace('https://', '')}, MIT, 별개의 도구)`));
   if (rp.state !== 'install') { say(`  ${rp.state === 'present' ? T.ivory(rp.line) : T.dim(rp.line)}`); return; }
-  say(`  ${T.ivory('REA 가 없습니다. 확인하면 공식 REA 를 설치해 정밀 모드(겉, 흐름, 속)로 읽습니다.')}`);
-  say(`  ${T.pad('패키지', 14)}${REA_PACKAGE}  ${T.dim('(npm 의 공식 패키지. 이 이름만 씁니다)')}`);
+  say(`  ${T.ivory(en ? 'REA is not installed. Confirm to install official REA for precise mode (surface, flow, code).' : 'REA 가 없습니다. 확인하면 공식 REA 를 설치해 정밀 모드(겉, 흐름, 속)로 읽습니다.')}`);
+  say(`  ${T.pad(en ? 'Package' : '패키지', 14)}${REA_PACKAGE}  ${T.dim(en ? '(official npm package only)' : '(npm 의 공식 패키지. 이 이름만 씁니다)')}`);
   if (rp.args) {
-    say(`  ${T.pad('실행할 명령', 14)}${reaCmd(rp.args)}`);
-    say(`  ${T.pad('바뀔 곳', 14)}${rp.clients.join(', ')} 의 설정 파일  ${T.gold('REA 연결 추가')}`);
-    say(`  ${T.pad('', 14)}${tilde(path.join(HOME, '.agents', 'skills', REA_SKILL))} 등 스킬 폴더  ${T.gold('REA 스킬 설치')}`);
-    say(T.dim('  설정 파일을 바꾸는 것은 REA 의 setup 이며, 바꾸기 전에 REA 가 백업을 남깁니다. 확인한 뒤 REA 가 낸 정확한 계획을 먼저 보여 줍니다.'));
+    say(`  ${T.pad(en ? 'Command' : '실행할 명령', 14)}${reaCmd(rp.args)}`);
+    say(`  ${T.pad(en ? 'Changes' : '바뀔 곳', 14)}${rp.clients.join(', ')} ${en ? 'config' : '의 설정 파일'}  ${T.gold(en ? 'configure REA' : 'REA 연결 추가')}`);
+    say(`  ${T.pad('', 14)}${tilde(path.join(HOME, '.agents', 'skills', REA_SKILL))} ${en ? 'etc.' : '등 스킬 폴더'}  ${T.gold(en ? 'install REA skill' : 'REA 스킬 설치')}`);
+    say(T.dim(en ? '  REA setup updates configs after creating backups and prints its dry-run plan first.' : '  설정 파일을 바꾸는 것은 REA 의 setup 이며, 바꾸기 전에 REA 가 백업을 남깁니다. 확인한 뒤 REA 가 낸 정확한 계획을 먼저 보여 줍니다.'));
   } else {
-    say(`  ${T.pad('실행할 명령', 14)}${reaCmd(['inspect-web-page', '…'])}  ${T.dim('(이번 해부에만)')}`);
-    say(`  ${T.pad('바뀔 곳', 14)}npm 의 내려받기 보관함만. ${T.dim('REA 를 연결할 에이전트가 없어 설정 파일은 바꾸지 않습니다')}`);
+    say(`  ${T.pad(en ? 'Command' : '실행할 명령', 14)}${reaCmd(['inspect-web-page', '…'])}  ${T.dim(en ? '(this run only)' : '(이번 해부에만)')}`);
+    say(`  ${T.pad(en ? 'Changes' : '바뀔 곳', 14)}${en ? 'npm cache only (no agent config changes).' : `npm 의 내려받기 보관함만. ${T.dim('REA 를 연결할 에이전트가 없어 설정 파일은 바꾸지 않습니다')}`}`);
   }
-  say(T.dim(`  확인 전에는 아무것도 내려받지 않습니다. 건너뛰려면 --no-rea`));
+  say(T.dim(en ? '  Nothing downloads before confirmation. Skip with --no-rea.' : '  확인 전에는 아무것도 내려받지 않습니다. 건너뛰려면 --no-rea'));
 }
 // REA 설치를 확인받는다. 돌려주는 것: yes / no / need-yes / dry-run
 async function confirmRea(o) {
   if (o.dryRun) return 'dry-run';
   if (o.yes) return 'yes';
   if (!interactive()) return 'need-yes';
-  return isYes(await ask(`${T.gold('?')} REA 도 설치할까요? [Y/n] `)) ? 'yes' : 'no';
+  return isYes(await ask(`${T.gold('?')} ${isEn(o) ? 'Install REA too? [Y/n] ' : 'REA 도 설치할까요? [Y/n] '}`)) ? 'yes' : 'no';
 }
 // 확인을 받은 뒤에만 부른다: REA 가 스스로 낸 계획(dry-run)을 먼저 받아 보여 주고, 이어서 설치한다.
 // 돌려주는 것: { ok, runner } (ok 가 false 면 가벼운 모드로 계속한다)
-async function applyRea(rp) {
-  if (!rp.args) { say(T.dim(`  이번 해부에 공식 패키지 ${REA_PACKAGE} 를 npx 로 씁니다.`)); return { ok: true, runner: rp.installer }; }
-  const later = `나중에: ${REA_HOW}`;
-  say(T.dim(`REA 의 설치 계획을 받아 오는 중입니다 (npm 의 공식 패키지 ${REA_PACKAGE})`));
+async function applyRea(rp, o = null) {
+  const en = isEn(o);
+  if (!rp.args) { say(T.dim(en ? `  Running official ${REA_PACKAGE} for this run.` : `  이번 해부에 공식 패키지 ${REA_PACKAGE} 를 npx 로 씁니다.`)); return { ok: true, runner: rp.installer }; }
+  const later = en ? `Later: ${REA_HOW}` : `나중에: ${REA_HOW}`;
+  say(T.dim(en ? `Fetching REA install plan (npm ${REA_PACKAGE})...` : `REA 의 설치 계획을 받아 오는 중입니다 (npm 의 공식 패키지 ${REA_PACKAGE})`));
   const p = await runRea(rp.installer, [...rp.args, '--dry-run', '--json'], { timeoutMs: 300000 });
   const pj = p.code === 0 ? parseJson(p.stdout) : null;
-  if (!pj || pj.status !== 'planned' || !Array.isArray(pj.plannedActions)) { say(`  ${T.gold('REA 는 건너뜁니다')}  REA 의 설치 계획을 받지 못했습니다${p.timedOut ? ' (시간 초과)' : ''}. 가벼운 모드로 계속합니다. ${later}`); return { ok: false }; }
+  if (!pj || pj.status !== 'planned' || !Array.isArray(pj.plannedActions)) { say(`  ${T.gold(en ? 'Skipping REA' : 'REA 는 건너뜁니다')}  ${en ? 'Could not retrieve REA plan' : 'REA 의 설치 계획을 받지 못했습니다'}${p.timedOut ? (en ? ' (timeout)' : ' (시간 초과)') : ''}. ${en ? 'Continuing in light mode.' : '가벼운 모드로 계속합니다.'} ${later}`); return { ok: false }; }
   if (pj.plannedActions.length) {
     const w = Math.max(...pj.plannedActions.map((a) => T.width(String(a.label || a.kind)))) + 2;
-    for (const a of pj.plannedActions) say(`  ${T.pad(String(a.label || a.kind), w)}${tilde(String(a.target || ''))}  ${T.gold(REA_ACT[a.kind] || String(a.kind))}`);
+    const actMap = en ? REA_ACT_EN : REA_ACT;
+    for (const a of pj.plannedActions) say(`  ${T.pad(String(a.label || a.kind), w)}${tilde(String(a.target || ''))}  ${T.gold(actMap[a.kind] || String(a.kind))}`);
   }
-  say(T.dim(`REA 를 설치하는 중입니다 (${REA_PACKAGE} setup)`));
+  say(T.dim(en ? `Installing REA (${REA_PACKAGE} setup)...` : `REA 를 설치하는 중입니다 (${REA_PACKAGE} setup)`));
   const r = await runRea(rp.installer, [...rp.args, '--yes', '--json'], { timeoutMs: 600000 });
   const j = parseJson(r.stdout);
-  if (r.code !== 0 || !j) { say(`  ${T.gold('REA 설치 실패')}  ${r.timedOut ? '시간 초과' : 'REA setup 이 끝나지 않았습니다'}. 가벼운 모드로 계속합니다. ${later}`); return { ok: false }; }
-  // REA 6.9.0 은 한 일을 "configured_<에이전트>", "installed_skill" 같은 문자열로 돌려준다 (옛 모양인 { kind } 도 읽는다).
+  if (r.code !== 0 || !j) { say(`  ${T.gold(en ? 'REA install failed' : 'REA 설치 실패')}  ${r.timedOut ? (en ? 'timeout' : '시간 초과') : (en ? 'REA setup did not finish' : 'REA setup 이 끝나지 않았습니다')}. ${en ? 'Continuing in light mode.' : '가벼운 모드로 계속합니다.'} ${later}`); return { ok: false }; }
   const applied = (Array.isArray(j.appliedActions) ? j.appliedActions : []).map((a) => (typeof a === 'string' ? a : String((a && (a.kind || a.id)) || '')));
   const nc = applied.filter((a) => /^configure/.test(a)).length;
   const ns = applied.some((a) => /^install(ed)?_skill/.test(a));
-  say(`  ${T.gold('REA 설치')}  에이전트 연결 ${nc}곳${ns ? ', REA 스킬 설치' : ''}${j.status ? T.dim(`  (${j.status})`) : ''}`);
+  say(`  ${T.gold(en ? 'REA installed' : 'REA 설치')}  ${en ? `${nc} agent config(s)${ns ? ', skill installed' : ''}` : `에이전트 연결 ${nc}곳${ns ? ', REA 스킬 설치' : ''}`}${j.status ? T.dim(`  (${j.status})`) : ''}`);
   return { ok: true, runner: rp.installer };
 }
 
@@ -351,7 +359,7 @@ async function install(o) {
     const todo = plan.filter((p) => !['skip', 'blocked'].includes(p.action));
     say(T.dim(en ? `  Copies ${files} skill files into those folders without modifying agent config files.` : `  위 폴더에 reversebusiness 스킬 파일 ${files}개를 복사합니다. 이 복사는 에이전트의 설정 파일을 건드리지 않습니다.`));
     say();
-    showReaPlan(rp);
+    showReaPlan(rp, o);
     say();
     const withRea = rp.state === 'install';
     if (!todo.length && !withRea) { say(en ? 'Everything is already up to date.' : '새로 설치할 곳이 없습니다.'); }
@@ -374,7 +382,7 @@ async function install(o) {
       // REA 는 따로 묻는다. 물어볼 사람이 없는 터미널에서 --yes 가 없으면 설치하지 않는다 (위에서 바뀔 것만 보여 주었다).
       if (withRea && (go || interactive())) {
         const c = await confirmRea(o);
-        if (c === 'yes') reaInstalled = (await applyRea(rp)).ok;
+        if (c === 'yes') reaInstalled = (await applyRea(rp, o)).ok;
         else if (c === 'no') say(en ? `Skipped REA install; continuing in light mode. Install later: ${REA_HOW}` : `REA 는 설치하지 않았습니다. 가벼운 모드로 동작합니다. 나중에 정밀 모드로: ${REA_HOW}`);
       }
     }
@@ -390,7 +398,7 @@ async function install(o) {
     say(`${T.bold(en ? 'Run directly from your terminal' : '에이전트 없이 바로 해부하기')}`);
   }
   say(`  ${T.dim(en ? 'From terminal:' : '터미널에서 바로:')}  ${NPX} ${en ? '<URL>' : '<주소>'}`);
-  say(`  ${T.dim(en ? 'Uninstall:' : '지우기:')}          ${NPX} --remove`);
+  say(`  ${T.dim(en ? 'Uninstall:    ' : '지우기:        ')}  ${NPX} --remove`);
   say(T.dim(en ? 'Note: reads public pages only (respects robots.txt) and never copies target brand, copy, or code.' : '지켜야 할 선: 로그인, 결제, 접근 제한을 넘지 않고, 코드, 문구, 이미지, 브랜드를 가져오지 않습니다.'));
   promo(o);
 }
@@ -538,12 +546,12 @@ async function offerReaForDissect(o) {
   // 정밀 모드는 브라우저 위에서 REA 를 쓴다. 브라우저 없이 REA 만 받아 봐야 쓸 데가 없으니 묻지 않는다.
   const { findBrowser } = await tool('render.mjs');
   if (o.render === 'off' || !findBrowser()) return {};
-  showReaPlan(rp);
+  showReaPlan(rp, o);
   say();
   const c = await confirmRea(o);
   if (c === 'dry-run') return { stop: true };
   if (c === 'yes') {
-    const a = await applyRea(rp);
+    const a = await applyRea(rp, o);
     say();
     return a.ok ? { runner: a.runner } : { note: `REA 설치가 끝나지 않아 가벼운 모드로 읽었습니다. 정밀 모드로: ${later}` };
   }
