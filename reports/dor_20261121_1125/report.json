@@ -1,0 +1,464 @@
+{
+  "schema": "rebiz/report@1",
+  "meta": {
+    "target": {
+      "name": "The Dor Brothers | AI Video Production Studio",
+      "kind": "web-service",
+      "url": "https://thedorbrothers.com/",
+      "relation": "third-party"
+    },
+    "analyzed_at": "2026-11-21",
+    "analyst": "GOAL 02: read-only manual synthesis over original REA evidence and official public pages",
+    "depth": {
+      "mode": "precise",
+      "reached": "flow",
+      "steps": [
+        {
+          "key": "surface",
+          "state": "done",
+          "note": "그려진 화면의 글과 구조를 읽음 (REA inspect-web-page, 글자 4149자)"
+        },
+        {
+          "key": "flow",
+          "state": "done",
+          "note": "누른 것 없음, 바깥 호스트 2곳"
+        },
+        {
+          "key": "code",
+          "state": "skipped",
+          "note": "이용약관을 읽지 못해 속 읽기(코드 읽기)는 하지 않았다"
+        }
+      ]
+    },
+    "read": {
+      "mode": "rendered",
+      "chars": 4149,
+      "html_chars": 4228,
+      "thin": false
+    },
+    "scope": "Original REA inspected the rendered homepage with passive flow only; additional official pricing, commercials, films, contact, about and privacy pages were manually read without browser interactions. No account, form submission, contracts, revenue analytics or code-level exploration. Original REA scope unchanged.",
+    "method": [
+      "robots.txt 를 먼저 확인",
+      "공개 HTML 을 GET 으로 받기 (스크립트 실행 없음)",
+      "REA inspect-web-page (겉 읽기: 글, 구조, 저장소 키 이름. 값은 읽지 않음)",
+      "흐름 읽기: 펼치기만 누르고 요청 호스트 이름만 모음",
+      "그려진 화면 읽기: 헤드리스 msedge.exe, 임시 프로필, 끝나면 브라우저를 끄고 프로필 삭제",
+      "읽은 것: 첫 페이지",
+      "collect.mjs 로 초안 만들기",
+      "Human-reviewed official public pages E4-E9 as secondary evidence; not REA-inspected pages."
+    ],
+    "terms": {
+      "status": "not-found",
+      "note": "REA robots.txt checked (E2) and public privacy policy reviewed (E6); a separate Terms of Service governing deep code-level analysis was not verified. Privacy is not terms. Code reading remains skipped and independent audit remains HOLD.",
+      "evidence": [
+        "E2",
+        "E6"
+      ]
+    },
+    "one_line": "The Dor Brothers sells bespoke AI film and commercial production to brands and agencies through portfolio-led inquiries and custom quotes; newsletter signup is separate, and sales figures are unverified.",
+    "draft": false
+  },
+  "evidence": [
+    {
+      "id": "E1",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/",
+      "note": "첫 페이지. 헤드리스 브라우저(임시 프로필)로 한 번 열어 그려진 화면의 글자와 구조, 구역의 위치를 읽음 (응답 200, 글자 4149자). 누르기와 입력 없음, 화면 캡처 없음",
+      "seen_at": "2026-11-21"
+    },
+    {
+      "id": "E2",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/robots.txt",
+      "note": "robots.txt. 따른 규칙: Allow /, Disallow 없음",
+      "seen_at": "2026-11-21"
+    },
+    {
+      "id": "E3",
+      "type": "doc",
+      "ref": "evidence/03_flow.json",
+      "note": "흐름 읽기 기록. 누른 것 없음. 폼, 로그인, 가입, 결제, 구매 단추는 누르지 않음. 페이지가 요청을 보내려던 호스트 이름 3개 (본문, 쿠키, 토큰은 남기지 않음)",
+      "seen_at": "2026-11-21",
+      "seen": "flow"
+    },
+    {
+      "id": "E4",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/ai-video-production-cost/",
+      "note": "Published price guidance, per-project quote, scope, delivery and timelines.",
+      "seen_at": "2026-11-21",
+      "seen": "page"
+    },
+    {
+      "id": "E5",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/ai-commercials/",
+      "note": "Commercial clients, production and delivery described by studio.",
+      "seen_at": "2026-11-21",
+      "seen": "page"
+    },
+    {
+      "id": "E6",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/privacy/",
+      "note": "Official privacy policy updated 31 Oct 2026. Brief to email inbox, newsletter to Mailchimp, Cloudflare host. Not Terms of Service.",
+      "seen_at": "2026-11-21",
+      "seen": "page"
+    },
+    {
+      "id": "E7",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/ai-films/",
+      "note": "Film production service, quoted scope and typical timeline.",
+      "seen_at": "2026-11-21",
+      "seen": "page"
+    },
+    {
+      "id": "E8",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/contact/",
+      "note": "Six-step project brief. No form submission.",
+      "seen_at": "2026-11-21",
+      "seen": "page"
+    },
+    {
+      "id": "E9",
+      "type": "url",
+      "ref": "https://thedorbrothers.com/about/",
+      "note": "Self-published studio and client portfolio.",
+      "seen_at": "2026-11-21",
+      "seen": "page"
+    }
+  ],
+  "sections": {
+    "money": {
+      "customer": [
+        {
+          "text": "Official site describes target clients as brands, agencies, artists and technology companies. Portfolio is the studio own claim, not independently audited customer proof.",
+          "status": "observed",
+          "evidence": [
+            "E1",
+            "E5",
+            "E9"
+          ]
+        }
+      ],
+      "problem": [
+        {
+          "text": "Studio offers creative and AI video production from concept and script to delivery, plausibly addressing demand for professional promotional video without organizing a conventional shoot. Customer pain is not measured.",
+          "status": "inferred",
+          "evidence": [
+            "E5",
+            "E7"
+          ]
+        }
+      ],
+      "price": [
+        {
+          "text": "Official site: projects start at USD 15,000; commercials usually USD 50,000-125,000; individual quotes depend on length, scope and deliverables. These are advertised price guidance, not actual closed deals.",
+          "status": "observed",
+          "evidence": [
+            "E4"
+          ]
+        },
+        {
+          "text": "Home brief has selectable budget bands USD 15k-50k, 50k-100k, 100k-300k, 300k+ and uncertain. These are form choices, not completed contract values.",
+          "status": "observed",
+          "evidence": [
+            "E1",
+            "E8"
+          ]
+        }
+      ],
+      "revenue": []
+    },
+    "flow": {
+      "steps": [
+        {
+          "stage": "arrive",
+          "label": "포트폴리오 발견",
+          "text": "Public landing page shows a showreel, film/commercial/music/viral work, selected clients and Start a Project. Actual acquisition channels are not verified.",
+          "status": "observed",
+          "evidence": [
+            "E1"
+          ]
+        },
+        {
+          "stage": "first_value",
+          "label": "제작 역량 검토",
+          "text": "A potential client may assess the showreel and selected projects before inquiring; actual visitor behavior is unmeasured.",
+          "status": "inferred",
+          "evidence": [
+            "E1",
+            "E5"
+          ]
+        },
+        {
+          "stage": "signup",
+          "label": "뉴스레터 구독 (계정 아님)",
+          "text": "The Subscribe section Sign Up asks for email news/updates. Privacy says it goes to Mailchimp. Project brief explicitly says No account, no mailing list, and is separate. No account creation was verified.",
+          "status": "observed",
+          "evidence": [
+            "E1",
+            "E6"
+          ]
+        },
+        {
+          "stage": "payment",
+          "label": "제작 의뢰와 개별 견적",
+          "text": "The six-step project brief asks service type, budget, subject, details, name/company and email. Public pricing page promises a custom quote; no checkout or private contract was observed.",
+          "status": "observed",
+          "evidence": [
+            "E1",
+            "E4",
+            "E8"
+          ]
+        },
+        {
+          "stage": "return",
+          "label": "뉴스레터·후속 작품",
+          "text": "Newsletter and portfolio/social links may encourage return visits; retention and repeat customer data are unknown.",
+          "status": "inferred",
+          "evidence": [
+            "E1",
+            "E6"
+          ]
+        }
+      ]
+    },
+    "map": {
+      "screens": [
+        {
+          "name": "Home /",
+          "purpose": "Portfolio evidence, positioning and project inquiry.",
+          "features": [
+            "showreel",
+            "client and work sections",
+            "Start a Project",
+            "project brief",
+            "separate Subscribe"
+          ],
+          "status": "observed",
+          "evidence": [
+            "E1"
+          ]
+        },
+        {
+          "name": "Pricing /ai-video-production-cost/",
+          "purpose": "Published starting prices and factors for custom quotations.",
+          "features": [
+            "minimum USD 15000",
+            "typical commercials USD 50000-125000",
+            "project-specific quote"
+          ],
+          "status": "observed",
+          "evidence": [
+            "E4"
+          ]
+        },
+        {
+          "name": "Commercials /ai-commercials/",
+          "purpose": "Demonstrate selected commercial work and brief-concept-production-delivery steps.",
+          "features": [
+            "client type",
+            "AI commercial work",
+            "deliverable format"
+          ],
+          "status": "observed",
+          "evidence": [
+            "E5"
+          ]
+        },
+        {
+          "name": "Contact /contact/",
+          "purpose": "Six-step inbound quote request, without submitted form.",
+          "features": [
+            "type",
+            "budget",
+            "subject",
+            "description",
+            "name/company",
+            "email"
+          ],
+          "status": "observed",
+          "evidence": [
+            "E8"
+          ]
+        },
+        {
+          "name": "Privacy /privacy/",
+          "purpose": "Published data handling claims; not Terms of Service.",
+          "features": [
+            "brief email handling",
+            "Mailchimp newsletter",
+            "Cloudflare hosting"
+          ],
+          "status": "observed",
+          "evidence": [
+            "E6"
+          ]
+        }
+      ]
+    },
+    "tech": {
+      "items": [
+        {
+          "layer": "Web surface",
+          "text": "REA passive inspection reported rendered HTML, script resources and Cloudflare response header; the passive flow observed external host names without payload (E3). Backend code is not authenticated.",
+          "status": "observed",
+          "evidence": [
+            "E1",
+            "E3"
+          ]
+        },
+        {
+          "layer": "Disclosed integration",
+          "text": "Privacy Policy states brief is emailed to the studio via Cloudflare, Google Workspace hosts mailbox, and newsletter list is held by Mailchimp; self-reported implementation.",
+          "status": "observed",
+          "evidence": [
+            "E6"
+          ]
+        },
+        {
+          "layer": "Production approach",
+          "text": "Studio describes multiple AI video models plus its own workflows and normal editing, sound and color post-production.",
+          "status": "observed",
+          "evidence": [
+            "E5",
+            "E7"
+          ]
+        },
+        {
+          "layer": "Private implementation",
+          "text": "Private server source, database, prompts, actual production costs and model configuration were not inspected.",
+          "status": "unknown",
+          "evidence": []
+        }
+      ]
+    },
+    "unknowns": [
+      {
+        "question": "Audited revenue, profitability, conversion rate, exact project deal prices",
+        "why": "Only published price guidance and self-reported portfolio stats are available.",
+        "next": "Record UNKNOWN until independently authenticated primary evidence exists."
+      },
+      {
+        "question": "Account, actual checkout, billing and contract terms",
+        "why": "Inquiry is not registration or payment; private client path was not accessed.",
+        "next": "Do not fabricate payments or post-contract screens."
+      },
+      {
+        "question": "Separate Terms of Service for deeper automated inspection",
+        "why": "Privacy page was reviewed; a separate terms document was not verified.",
+        "next": "Legal review or explicit authorization needed before any code-level step."
+      },
+      {
+        "question": "Independent proof of customers, views, project count",
+        "why": "Client and audience claims are stated by company; no exhaustive independent audit.",
+        "next": "Check client publishing records separately."
+      },
+      {
+        "question": "Actual tech stack and internal proprietary video pipeline",
+        "why": "No authorized code/deep inspection or private technical documentation.",
+        "next": "Record only publicly stated facts."
+      },
+      {
+        "question": "Newsletter conversion, return visits, repeat business",
+        "why": "Not publicly measurable from static pages.",
+        "next": "Keep metrics UNKNOWN."
+      }
+    ],
+    "my_version": {
+      "working_name": "",
+      "same_problem": "",
+      "who": "",
+      "mvp": [],
+      "differences": [
+        {
+          "title": "",
+          "text": ""
+        },
+        {
+          "title": "",
+          "text": ""
+        },
+        {
+          "title": "",
+          "text": ""
+        }
+      ],
+      "not_taken": []
+    }
+  },
+  "skeleton": {
+    "note": "브라우저가 그린 화면에서 구역의 위치와 길이를 잰 뼈대. 순서와 길이는 잰 값이고, 층 이름은 규칙으로 붙인 추정이다. 화면 캡처는 저장하지 않았고, 원본의 글과 그림은 들어 있지 않다.",
+    "evidence": [
+      "E1"
+    ],
+    "blocks": [
+      {
+        "name": "이동 메뉴",
+        "role": "other",
+        "weight": 64,
+        "kind": "nav",
+        "status": "inferred"
+      },
+      {
+        "name": "영상이나 그림 구역",
+        "role": "attract",
+        "weight": 1400,
+        "kind": "media",
+        "status": "inferred"
+      },
+      {
+        "name": "이동 메뉴 2",
+        "role": "other",
+        "weight": 408,
+        "kind": "nav",
+        "status": "inferred"
+      },
+      {
+        "name": "목록 구역",
+        "role": "value",
+        "weight": 1251,
+        "kind": "list",
+        "status": "inferred"
+      },
+      {
+        "name": "후기 구역",
+        "role": "pay",
+        "weight": 1467,
+        "kind": "quotes",
+        "status": "inferred"
+      },
+      {
+        "name": "목록 구역 2",
+        "role": "value",
+        "weight": 778,
+        "kind": "list",
+        "status": "inferred"
+      },
+      {
+        "name": "목록 구역 3",
+        "role": "value",
+        "weight": 1142,
+        "kind": "list",
+        "status": "inferred"
+      },
+      {
+        "name": "가격 구역",
+        "role": "pay",
+        "weight": 1270,
+        "kind": "price",
+        "status": "inferred"
+      },
+      {
+        "name": "꼬리말",
+        "role": "other",
+        "weight": 498,
+        "kind": "footer",
+        "status": "inferred"
+      }
+    ]
+  }
+}
