@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opportunity Review | 실증 비교 보고서</title>
+<style>
+:root{font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17232c;background:#f6f7f9}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:1200px;margin:auto;padding:28px 25px 72px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.brand{font-size:11px;letter-spacing:.16em;font-weight:800;color:#5a6a76}h1{font-size:clamp(28px,5vw,43px);letter-spacing:-.05em;margin:10px 0 7px}p{color:#61717e;margin:4px 0 12px}.sub{max-width:870px}a{color:#2462a0}a:hover{text-decoration:none}
+.panel{background:#fff;border:1px solid #e3e7eb;border-radius:16px;padding:20px;margin:16px 0;box-shadow:0 5px 20px rgba(37,50,70,.028)}
+.badge{display:inline-flex;align-items:center;border:1px solid #dde4eb;border-radius:99px;padding:4px 9px;font-size:11px;color:#52616b;white-space:nowrap;background:#fff}.badge.hold{color:#996010;border-color:#f1dfbc;background:#fff9ee}
+h2{font-size:19px;margin:0 0 14px;letter-spacing:-.02em}h3{font-size:17px;margin:0 0 6px}.muted{font-size:12px;color:#73808a}.warning{background:#fff7eb;border:1px solid #f2dfbc;color:#70501b;border-radius:10px;padding:12px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.metric{padding:17px;background:white;border:1px solid #e3e7ec;border-radius:13px}.metric b{display:block;font-size:27px;letter-spacing:-.04em}.metric span{color:#627482;font-size:12px}
+input,select,textarea{border:1px solid #dce2e7;border-radius:9px;padding:9px 10px;font:inherit;color:inherit;background:white}input,select{min-width:170px}textarea{width:100%;min-height:80px;resize:vertical}button{border-radius:9px;background:#243f59;color:white;border:1px solid #243f59;cursor:pointer;padding:9px 13px;font:inherit}button.alt{background:#fff;border-color:#d6dee5;color:#263b4b}button:hover{filter:brightness(.95)}.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.grow{flex:1}.card{border-top:1px solid #e8ebee;padding:18px 0}.card:first-child{border-top:0}.cardhead{display:flex;align-items:start;justify-content:space-between;gap:14px}.rank{font-weight:800;font-size:22px;min-width:33px;color:#778b9b}.score{font-size:19px;font-weight:800}.desc{max-width:880px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.minor{padding:12px;border:1px solid #e6eaed;border-radius:10px;background:#fafbfc}.minor strong{display:block;font-size:12px;margin-bottom:4px}details{margin:13px 0;border:1px solid #e6eaed;border-radius:10px;padding:9px 12px}summary{font-weight:650;cursor:pointer}.tablewrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:12px}th,td{padding:10px 8px;text-align:left;border-bottom:1px solid #ecedef;vertical-align:top}th{color:#5c6a76;background:#f8fafb}.source{word-break:break-all;font-size:12px}.phase{border-left:2px solid #cad6e0;padding:8px 14px;margin:11px 0}.section{border-top:1px solid #eef0f2;padding:14px 0}.section:first-of-type{border-top:0}label{font-weight:650;font-size:12px}ul{margin:6px 0 12px;padding-left:21px}li{padding:2px 0}.small{font-size:12px}.subtitle{font-size:16px;font-weight:750}footer{color:#7a8995;font-size:12px;padding:20px 0}#busy{color:#a3343c}
+@media(max-width:780px){.wrap{padding:15px 12px 60px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.cardhead{flex-wrap:wrap}.panel{padding:15px}input,select{width:100%}}
+</style></head><body><main class="wrap">
+<div class="top"><span class="brand">REVERSEBUSINESS / EVIDENCE REVIEW</span><div class="row"><a href="/" class="badge">← 원래 Opportunity Lab</a><span class="badge hold">WJ 최종 승인 대기</span></div></div>
+<h1>후보 10개. 사업 실험 3개.</h1>
+<p class="sub">실제 원본 자료, 공개된 회사 주장, 독립 분야 정책, 분석가 가설을 분리한 검수 보고서. <strong>여기에 표시된 순위는 시장 성장률·수익성 인증이 아니라 추가 실험 우선순위입니다.</strong></p>
+<div class="metrics"><div class="metric"><b id="count">–</b><span>발견된 기업·서비스 후보</span></div><div class="metric"><b id="three">–</b><span>전략 검토 대상</span></div><div class="metric"><b id="actual">0</b><span>독립 검증된 업체 매출</span></div><div class="metric"><b id="hold">–</b><span>HOLD / 최종 승인 아님</span></div></div>
+<div class="warning" id="warning">Golden 7×7의 승인된 원본을 변경하지 않았습니다. 기존 7개 조사축은 임시 근거 분류이며, 원본 49문항과 동일하다고 주장하지 않습니다.</div>
+<section class="panel"><h2>01 · 시장·성장·정책 교차검증</h2><div id="market">불러오는 중...</div><div id="external"></div></section>
+<section class="panel"><div class="row"><h2 class="grow">02 · 후보 10개 검수</h2><span class="badge hold">모두 HOLD</span></div>
+<div class="tools"><input id="q" aria-label="후보 검색" placeholder="서비스 이름·니치 검색"><select id="filter" aria-label="후보 분류"><option value="all">전체 10개</option><option value="top">상위 전략 3개</option><option value="rest">그 외 7개</option></select><select id="order" aria-label="정렬"><option value="rank">검토 우선순위</option><option value="name">이름순</option></select><button class="alt" id="json">원본 근거 JSON 다운로드</button></div>
+<p class="muted">기능·가격은 각 업체 공개 정보(SOURCED)입니다. 판매량·실거래·성장률·고객 인터뷰가 없다면 UNKNOWN으로 기록됩니다. 점수는 최대 100점의 연구 가설입니다.</p><div id="candidates"></div></section>
+<section class="panel"><div class="row"><h2 class="grow">03 · 상위 3개 사업 전략</h2><span class="badge">비공개 검증 계획</span></div><div id="strategies">불러오는 중...</div></section>
+<section class="panel"><h2>04 · 독립 QA 및 WJ 검수</h2><div id="qa"></div>
+<label for="reviewnotes">WJ 검수 메모 (이 브라우저에만 보관, 프로젝트 원본 변경 없음)</label><textarea id="reviewnotes" placeholder="예: 1번 고객 가설 보완 / 2번 사료 권리 확인 / 3번 30초 시범 먼저..."></textarea><div class="row" style="margin-top:10px"><button id="saveNote">메모 저장</button><button class="alt" id="exportNote">검수 메모 파일 내려받기</button></div><p class="muted" id="noteStatus">이 화면에서는 승인을 자동 처리하지 않습니다.</p></section>
+<footer>2026-11-21 · 원본 유지 · 추가 결제/유료 API/외부 게시/승인 없음 · 사업 가능성 추정과 실측 데이터는 엄격히 구분</footer>
+</main><script>
+const $=id=>document.getElementById(id);
+const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+const link=u=>typeof u==='string'&&/^https:\/\//.test(u)?'<a class="source" target="_blank" rel="noopener noreferrer" href="'+safe(u)+'">'+safe(u)+'</a>':'<span>UNKNOWN</span>';
+let report=null;
+const fmtList=(xs)=>'<ul>'+xs.map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';
+function renderMarket(){
+ const m=report.market;
+ $('market').innerHTML='<div class="grid"><div class="minor"><strong>실제 수요 성장률</strong><span>'+safe(m.demandGrowth)+'</span></div><div class="minor"><strong>10개 업체 매출 검증</strong><span>'+safe(m.vendorRevenue)+'</span></div><div class="minor"><strong>기술 공급 측면의 변화</strong><span>'+safe(m.technologySignal)+'</span></div><div class="minor"><strong>AI 역사 고증·플랫폼 위험</strong><span>'+safe(m.qualityRisk+' / '+m.platformRisk)+'</span></div></div><details><summary>보수·기준·낙관 전망 보기 — 모두 추정이며 수치 예측 없음</summary>'+fmtList(m.futureScenarios)+'</details>';
+ $('market').insertAdjacentHTML('beforeend','<div class="section"><strong>교육 분야 AI 활용 실측 (역사 영상 수요 수치 아님)</strong>'+ (m.adjacentSignals||[]).map(s=>'<p><b>'+safe(s.population)+'</b>: '+safe(s.metric)+' — '+link(s.source)+'<div class="muted">'+safe(s.interpretation)+'</div></p>').join('')+'</div>');
+ $('external').innerHTML='<div class="section"><strong>회사에서 독립된 정책·연구 원본</strong><ul>'+report.industryEvidence.map(e=>'<li>'+safe(e.type)+' · '+safe(e.title)+' — '+link(e.url)+'</li>').join('')+'</ul><p class="muted">이 자료는 시장의 책임·운영상 위험을 검증하는 것이며 특정 업체의 매출이나 서비스 품질을 독립 증명하지 않습니다.</p></div>';
+}
+function renderCandidates(){
+ let rows=report.candidates.filter(c=>$('filter').value==='all'||($('filter').value==='top' ? c.selected:!c.selected)).filter(c=>(c.name+' '+c.position+' '+c.offer).toLowerCase().includes($('q').value.toLowerCase()));
+ if($('order').value==='name')rows=rows.slice().sort((a,b)=>a.name.localeCompare(b.name));
+ $('candidates').innerHTML=rows.map(c=>{
+ const axes=c.axes.map(a=>'<tr><td><b>'+safe(a.axis)+'</b></td><td><span class="badge '+(a.status==='UNKNOWN'?'hold':'')+'">'+safe(a.status)+'</span></td><td>'+safe(a.claim)+'<div>'+a.evidence.map(e=>link(e.url)).join(' · ')+'</div></td></tr>').join('');
+ const sc=Object.entries(c.scoreBreakdown).map(([k,v])=>'<span class="badge">'+safe(k)+' '+v+'</span>').join(' ');
+ return '<article class="card"><div class="cardhead"><div class="row"><span class="rank">'+c.rank.toString().padStart(2,'0')+'</span><div><h3>'+safe(c.name)+'</h3><span class="badge hold">HOLD</span> '+(c.selected?'<span class="badge">전략 검토 3개</span>':'')+'</div></div><div><span class="score">'+c.priorityScore+'/100</span><div class="muted">가설 기반 검토점수</div></div></div><p>'+safe(c.position)+' — '+safe(c.offer)+'</p><p><strong>원본 서비스:</strong> '+link(c.url)+'</p><div class="grid"><div class="minor"><strong>업체 공개 가격(실지급액 미확정)</strong>'+safe(c.pricing)+'<div>'+link(c.pricingUrl)+'</div></div><div class="minor"><strong>우리의 니치 사업 가설</strong>'+safe(c.opportunity)+'</div></div><div class="grid" style="margin-top:10px"><div class="minor"><strong>핵심 위험</strong>'+safe(c.risk)+'</div><div class="minor"><strong>추가 필요한 증거</strong>'+safe(c.missing)+'</div></div><details><summary>임시 7개 조사축의 출처·UNKNOWN (Golden 7×7 인증 아님)</summary><div class="tablewrap"><table><thead><tr><th>축</th><th>근거 상태</th><th>확인 내용</th></tr></thead><tbody>'+axes+'</tbody></table></div><p class="muted">회사 실제 매출·유료 고객·기간별 성장: UNKNOWN / 독립 업체 운영품질 감사: NOT_EXECUTED</p></details><details><summary>이 후보의 가설 점수 산정 방식</summary><div class="row">'+sc+'</div><p class="muted">'+safe(report.rubric.warning)+'</p></details></article>'
+ }).join('')||'<p>검색 조건에 맞는 후보가 없습니다.</p>';
+}
+function renderStrategies(){
+ $('strategies').innerHTML=report.strategies.map(s=>'<article class="card"><div class="row"><span class="badge">검토 '+s.priority+'순위</span><span class="badge hold">미승인 · HOLD</span></div><h3 style="margin-top:10px">'+safe(s.title)+'</h3><p>'+safe(s.problem)+'</p><div class="grid"><div class="minor"><strong>정확한 구매자 가설</strong>'+safe(s.buyer)+'</div><div class="minor"><strong>경쟁 제품과 구분되는 방법</strong>'+safe(s.edge)+'</div></div><div class="section"><strong>고객에게 판매할 결과물</strong>'+fmtList(s.offering)+'</div><div class="section"><strong>수익 구조 (계약·매출 아직 UNKNOWN)</strong><p>'+safe(s.revenue)+'</p></div><div class="section"><strong>실제 수요 검증 방법</strong><p>'+safe(s.pilot)+'</p></div><div class="section"><strong>90일 실행 계획 — 완료 결과가 아니라 실험 설계</strong>'+s.phase.map((p,i)=>'<div class="phase"><strong>'+[1,2,3][i]+'단계</strong><div>'+safe(p)+'</div></div>').join('')+'</div><div class="grid"><div><strong>실험 지표</strong>'+fmtList(s.metrics)+'</div><div><strong>중단 조건</strong><p>'+safe(s.kill)+'</p><strong>보수·기준·낙관</strong>'+fmtList(s.scenario)+'</div></div><p class="warning"><b>판정:</b> 매출 증거 없음, 실행·구매·배포는 WJ 승인 전 금지. 사업 제안 초안이며 계약 가능성 보증 아님.</p></article>').join('');
+}
+function renderQA(){
+ const q=report.quality;
+ $('qa').innerHTML='<div class="grid"><div class="minor"><strong>검토 데이터 유효성</strong>후보 '+q.candidateCount+'개 / 전략 '+q.strategiesCount+'개 / 모든 후보 HOLD<br>업체 매출 검증 '+q.independentVendorRevenueVerified+'개 / 성장 시계열 '+q.verifiedTrendSeriesCount+'개</div><div class="minor"><strong>근거 수준</strong>'+safe(q.crossChecks.join(' / '))+'</div></div><details open><summary>NOT_EXECUTED / HOLD 항목</summary>'+fmtList(q.notExecuted)+'</details><p class="warning">'+safe(report.governance.statement)+'</p>';
+}
+function start(){
+ $('count').textContent=report.candidates.length;$('three').textContent=report.strategies.length;$('hold').textContent=report.candidates.filter(x=>x.verdict==='HOLD').length;
+ renderMarket();renderCandidates();renderStrategies();renderQA();
+ for(const k of ['q','filter','order'])$(k).addEventListener(k==='q'?'input':'change',renderCandidates);
+ $('json').onclick=()=>download('opportunity_review_20261121.json',JSON.stringify(report,null,2));
+ $('reviewnotes').value=localStorage.getItem('opportunity_review_note_20261121')||'';
+ $('saveNote').onclick=()=>{localStorage.setItem('opportunity_review_note_20261121',$('reviewnotes').value);$('noteStatus').textContent='메모를 이 브라우저에 저장했어. 사업 승인·원본 변경 아님.'};
+ $('exportNote').onclick=()=>download('WJ_review_note_20261121.txt',$('reviewnotes').value);
+}
+function download(n,text){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));a.href=u;a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+fetch('/api/review',{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(x=>{report=x;start()}).catch(e=>{$('market').textContent='검증 보고서를 불러오지 못했어: '+e.message});
+</script></body></html>

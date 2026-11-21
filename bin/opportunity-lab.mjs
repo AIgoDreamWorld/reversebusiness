@@ -9,6 +9,8 @@ import {searchCandidates} from '../lib/opportunity-search.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dir=path.join(root,'experiments','opportunity-lab');
 const ui=path.join(root,'viewer','opportunity-lab.html');
+const reviewUi=path.join(root,'viewer','opportunity-review.html');
+const reviewJson=path.join(root,'reports','opportunity-review_20261121.json');
 const port=Number(process.env.OPPORTUNITY_PORT||4178);
 fs.mkdirSync(dir,{recursive:true});
 let state={idea:'',type:'auto',candidates:[],recommendations:[],excluded:[],round:1,status:'EMPTY',history:[]};
@@ -72,6 +74,8 @@ async function act(req,res,route){
 const server=http.createServer((req,res)=>{
  const route=new URL(req.url||'/', 'http://localhost').pathname;
  if(req.method==='GET'&&route==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return fs.createReadStream(ui).pipe(res)}
+ if(req.method==='GET'&&route==='/review'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return fs.createReadStream(reviewUi).pipe(res)}
+ if(req.method==='GET'&&route==='/api/review'){res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});return fs.createReadStream(reviewJson).pipe(res)}
  if(req.method==='GET'&&route==='/api/state'||req.method==='POST'&&route.startsWith('/api/'))return void act(req,res,route);
  send(res,404,{error:'NOT_FOUND'});
 });
