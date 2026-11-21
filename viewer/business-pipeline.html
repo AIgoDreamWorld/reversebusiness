@@ -1,0 +1,80 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReverseBusiness | 사업 전략부터 독립 실행기까지</title>
+<style>
+:root{font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;color:#15232e;background:#f5f7f9}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1250px;margin:auto;padding:28px 20px 70px}h1{font-size:clamp(27px,4vw,42px);letter-spacing:-.045em;margin:6px 0}h2{font-size:19px;margin:0 0 14px}h3{font-size:15px;margin:0 0 5px}p{color:#657680;margin:7px 0 13px}.top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.brand{font-size:12px;color:#526778;font-weight:800;letter-spacing:.13em}.box{background:#fff;border:1px solid #e2e7eb;border-radius:16px;padding:20px;margin-top:16px;box-shadow:0 6px 22px #26384806}.notice{border:1px solid #ebd6b7;background:#fff9f0;border-radius:10px;padding:11px 14px;color:#805e23;font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{background:#fff;border:1px solid #e1e5e9;border-radius:12px;padding:15px}.metric b{font-size:25px;display:block}.metric small{color:#75848b}input,select,textarea{width:100%;background:white;color:#22343f;border:1px solid #ccd4dc;padding:9px 10px;border-radius:9px;font:inherit}textarea{min-height:80px;resize:vertical}label{font-size:12px;display:block;font-weight:750;color:#374957;margin-bottom:5px;margin-top:8px}button{font:inherit;border-radius:9px;background:#233f5a;border:1px solid #233f5a;color:white;padding:10px 15px;cursor:pointer}button.alt{background:white;color:#253e53;border:1px solid #cbd5dd}button:disabled{opacity:.46;cursor:not-allowed}button:hover{filter:brightness(.96)}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pill{border:1px solid #d8e1e7;padding:3px 9px;border-radius:100px;font-size:11px;white-space:nowrap}.hold{background:#fff7e8;border-color:#ebd7af;color:#805b12}.ok{background:#f0f7f1;border-color:#cadfcd;color:#32713c}.bad{color:#b0323a}.muted{color:#667782;font-size:12px}.line{border-top:1px solid #eef1f2;padding:14px 0}.line:first-child{border-top:0}.stack{display:grid;gap:12px}a{color:#285f94}a:hover{text-decoration:none}.evidence{margin:9px 0;padding:11px;border-radius:10px;border:1px solid #e5e9eb;background:#fafcfd}details{border:1px solid #e6eced;border-radius:8px;padding:8px 11px;margin:10px 0}summary{cursor:pointer;font-weight:700}#message{white-space:pre-wrap;font-size:12px;min-height:1em}.flow{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:18px 0}.flow span{border:1px solid #dde3e8;border-radius:7px;background:white;padding:7px 11px;font-size:12px}.flow i{font-style:normal;color:#778}pre{overflow:auto;padding:12px;background:#f1f5f8;border-radius:8px;font-size:11px}footer{font-size:11px;color:#7e8b94;margin-top:30px}@media(max-width:850px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px 12px 60px}}
+</style></head>
+<body><main class="wrap">
+<div class="top"><span class="brand">REVERSEBUSINESS / WJ STRATEGY WORKBENCH</span><span class="pill hold">Golden 7×7 원본 미연결 · 승인 차단</span></div>
+<h1>근거로 사업을 고르고,<br>승인한 뒤 독립 실행기를 만든다.</h1>
+<p>WJ 포크의 실제 실행 공정. 검색 → 교차검증 → 전략 보고 → WJ 의사결정 → 기존 REA 복원 자산 연결. <strong>결제·게시·자동 제작은 수행하지 않습니다.</strong></p>
+<div class="flow"><span>① 아이디어</span><i>→</i><span>② 실재 후보 10개</span><i>→</i><span>③ 사업성 근거</span><i>→</i><span>④ 전략 3개</span><i>→</i><span>⑤ WJ 승인/반려</span><i>→</i><span>⑥ 복원 자산</span><i>→</i><span>⑦ 독립 실행기</span></div>
+<div class="cards"><div class="metric"><b id="nCandidates">0</b><small>발견 후보</small></div><div class="metric"><b id="nPriorities">0</b><small>검토 우선 후보</small></div><div class="metric"><b id="nStrategies">0</b><small>근거 통과 전략</small></div><div class="metric"><b id="nRounds">1</b><small>탐색 회차</small></div></div>
+<div class="box"><h2>01 · 어떤 사업을 찾을까?</h2><div class="grid"><div><label for="idea">아이디어 또는 사업 분야</label><textarea id="idea" placeholder="예: 학교 체험형 3D 물리 시뮬레이터"></textarea></div><div><label for="kind">검색 범위</label><select id="kind"><option value="auto">서비스 + 콘텐츠</option><option value="service">서비스 사업</option><option value="content">콘텐츠 사업</option></select><p class="muted">검색은 분야에 무관하게 작동하도록 수정됨. Tavily 무료 한도 사용, Google 선불 잔액 0원인 동안 Gemini 유료 API 사용 없음.</p></div></div>
+<div class="row"><button id="discover">실제 URL 검색 실행</button><button class="alt" id="manualToggle">이미 찾은 URL 등록</button><span id="provider" class="muted"></span></div>
+<div id="manualBox" hidden><p class="muted">한 줄에 URL | 서비스 이름 | 설명. 붙여넣은 URL은 실재성 검증이 아닙니다.</p><textarea id="manualUrls" placeholder="https://example.com | Example | 상품 소개"></textarea><button id="manualGo">URL 후보 등록</button></div></div>
+<div class="box"><div class="row"><h2 style="flex:1">02 · 검색 후보와 증거</h2><span class="pill hold">URL 발견 ≠ 검증</span></div><div id="candidateList">검색할 아이디어를 입력해 주세요.</div></div>
+<div class="box"><div class="row"><h2 style="flex:1">03 · 자동 증거 감사와 전략 검토</h2><button id="analyze">현재 후보 근거 감사</button></div>
+<p class="notice">후보 10개의 단순 검색 순위를 사업 성공 가능성 순위로 사용하지 않습니다. 근거가 부족하면 ‘연구 우선 후보 3개’만 제시하고 사업 전략 추천과 WJ 승인은 차단합니다.</p>
+<div id="analysis">아직 감사하지 않았습니다.</div><details><summary>전문 분석 결과(데이터) 내려받기</summary><div class="row"><button class="alt" id="exportReport">감사 JSON 저장</button><button class="alt" id="exportMarkdown">전략 보고서 MD 내려받기</button></div></details>
+<div class="grid"><div><h3>후보별 전략 초안 입력(고급)</h3><p class="muted">실제 근거가 확보된 전략만 인정합니다. 회사의 주장이나 AI 추정으로 값을 채우면 승인되지 않습니다.</p><textarea id="strategyJson" placeholder='{"candidateId":"...","customer":"...","problem":"...","offer":"...","competition":"...","revenue":"...","distribution":"...","cost":"...","risks":"...","differentiation":"...","evidence":"...","sources":[{"url":"https://...","claim":"..."}]}'></textarea><button class="alt" id="saveStrategy">전략 증거 초안 등록</button></div><div><h3>기존 역사 영상 사례</h3><p class="muted">과거 10개/3개 사례 보고서는 독립 실험 예시입니다. 새로운 아이디어의 자동 검색 결과로 재사용하거나 공식 7×7 PASS를 선언하지 않습니다.</p><a href="/review" target="_blank" rel="noopener">역사 영상 실험 보고서 보기</a></div></div></div>
+<div class="grid">
+<section class="box"><h2>04 · WJ 승인 또는 반려</h2><p class="muted">현재 감사 결과에만 유효합니다. WJ 본인의 명시적 판단 없이는 진행하지 않고 승인 이후에도 Golden 변경이나 배포는 금지합니다.</p>
+<label for="rejectReason">반려 이유</label><textarea id="rejectReason" placeholder="예: 구매자 데이터 부족. 다음 회차는 한국 교육 기관 B2B 중심으로 변경"></textarea>
+<div class="row"><button id="reject" class="alt">반려하고 새 회차</button></div>
+<label for="confirm">전략 승인 문구</label><input id="confirm" placeholder="WJ 전략 승인"><p class="muted">정확한 문구와 근거가 완비된 보고서가 있어야 승인할 수 있습니다. 로컬 명시 확인이며 사용자 신원 인증 시스템은 아닙니다.</p>
+<button id="approve">전략 승인 기록 시도 (근거 부족 시 차단)</button>
+<div id="decision" class="muted" style="margin-top:10px">현재 승인된 전략 없음</div></section>
+<section class="box"><h2>05 · REA 복원 자산 재사용</h2><p>원본 프로젝트와 기존 검증 자산의 경로·파일 해시를 먼저 확인하고, 승인된 전략에 해당하는 기술만 연결해요. 소스를 복제하거나 프로그램을 임의로 만들지 않습니다.</p><div class="row"><button id="assets" class="alt">기존 기술 자산 보기</button><button id="handoff">독립 제작 인계 가능 여부</button></div><div id="assetList" style="margin-top:12px" class="muted">대기 중 · 독립 실행기 자동 생성 없음</div></section></div>
+<div class="box"><h2>현재 실행 상태</h2><pre id="message">준비됨. 외부 유료 호출 없음.</pre><button id="refresh" class="alt">현 상태 다시 확인</button></div>
+<footer>원본 REA · 3×3 · Golden 7×7 변경 금지 / WJ 최종 승인 ≠ 자동 테스트 PASS / 검색 실패 시 재검색을 꾸며내지 않음 / 독립 실행기 제작은 WJ 전략 승인 뒤</footer>
+</main><script>
+const $=id=>document.getElementById(id),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+let state={},lastReport=null;
+function msg(v){$('message').textContent=typeof v==='string'?v:JSON.stringify(v,null,2).slice(0,12000)}
+async function api(name,body){const res=await fetch('/api/'+name,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const obj=await res.json();if(!res.ok)throw Error((obj.error||res.status)+' '+(obj.blockers||[]).join(', '));return obj}
+async function run(fn){try{await fn()}catch(e){msg('BLOCKED / FAIL: '+e.message)}}
+function renderCandidates(){
+ const el=$('candidateList');el.replaceChildren();
+ if(!state.candidates?.length){el.textContent='확인된 후보가 없습니다. 검색 서비스가 유료 제한 또는 무료 한도에 걸리면 실패를 표시합니다.';return}
+ state.candidates.forEach((c,i)=>{
+  const div=document.createElement('div');div.className='line';
+  div.innerHTML='<div class="row"><b>'+(i+1)+'. '+safe(c.name)+'</b><span class="pill hold">DISCOVERED/HOLD</span><span class="muted">'+safe(c.kind)+'</span></div><a target="_blank" rel="noopener noreferrer" href="'+safe(c.url)+'">'+safe(c.url)+'</a><p>'+safe(c.summary).slice(0,380)+'</p>';
+  const det=document.createElement('details');det.innerHTML='<summary>근거 입력 (원문 URL·확인 내용)</summary><p class="muted">입력만으로 VERIFIED가 되지 않습니다. 원문 보존·해시·독립 검증을 별도로 확인해야 합니다.</p>';
+  const grid=document.createElement('div');grid.className='grid';
+  const left=document.createElement('div');left.innerHTML='<label>조사 항목 (승인된 Golden 7×7 아님)</label><select class="axis">'+['Who','What','Where','Market','How','Pricing','Niche'].map(x=>'<option>'+x+'</option>').join('')+'</select><label>자료 URL</label><input class="sourceUrl" placeholder="https://..."><label>확인한 사실과 날짜</label><textarea class="sourceNote"></textarea>';
+  const right=document.createElement('div');right.innerHTML='<label>자료의 성격</label><select class="sourceKind"><option value="PROVIDER">업체 자체 자료</option><option value="INDEPENDENT">독립 외부 자료</option></select><p class="notice">단순히 독립 자료를 선택해도 출처 해시와 실제 대조가 없으면 검증 미완료입니다.</p>';
+  const b=document.createElement('button');b.className='alt';b.textContent='원문 링크·주장만 기록';
+  b.onclick=()=>run(async()=>{const url=left.querySelector('.sourceUrl').value,note=left.querySelector('.sourceNote').value;const j=await api('update',{id:c.id,axis:left.querySelector('.axis').value,status:url&&note?'SOURCED':'UNKNOWN',note,evidence:url&&note?[{url,note,checkedAt:new Date().toISOString(),sourceType:right.querySelector('.sourceKind').value}]:[]});state.candidates[i]=j.candidate;lastReport=null;render();msg('수집 근거 저장: SOURCED (독립 검증 아님)')});
+  right.append(b);grid.append(left,right);det.append(grid);div.append(det);el.append(div);
+ });
+}
+function render(){
+ $('nCandidates').textContent=state.candidates?.length||0;$('nRounds').textContent=state.round||1;
+ $('nPriorities').textContent=lastReport?.researchPriorities?.length||0;$('nStrategies').textContent=lastReport?.strategies?.length||0;
+ $('provider').textContent=state.searchEnabled?'Tavily 제한 무료 검색 연결됨':'Tavily 미설치 · URL 직접 등록만 가능';
+ renderCandidates();
+}
+function renderReport(r){
+ lastReport=r;render();
+ let content='<p class="row"><span class="pill '+(r.verdict==='HOLD'?'hold':'ok')+'">'+safe(r.verdict)+'</span> <span class="muted">보고서 해시: '+safe(r.evidenceHash.slice(0,16))+'...</span></p>';
+ content+='<div class="notice"><b>승인 차단 사유</b><ul>'+r.blockers.map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul></div>';
+ content+='<h3 style="margin-top:15px">근거 수준에 따른 조사 우선 후보 (사업 추천 아님)</h3>';
+ for(const p of r.researchPriorities)content+='<div class="line"><b>'+p.position+'. '+safe(p.name)+'</b> <span class="pill hold">'+safe(p.status)+'</span><div class="muted">근거 있는 임시 조사축 '+p.audit.sourcedDimensions+'/7 · 독립 검증 축 '+p.audit.verifiedDimensions+'/7 · 외부 출처 도메인 '+p.audit.independentDomains+'개</div><details><summary>왜 HOLD인가? · 누락 근거</summary><ul>'+p.audit.blockers.map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul></details></div>';
+ content+='<p class="muted">실제 근거를 통과한 전략 '+r.strategies.length+'개. 불충분한 경우 3개 전략을 창작해 ‘승인 가능’으로 표시하지 않습니다.</p>';
+ $('analysis').innerHTML=content;
+}
+async function refresh(){const d=await api('state');state=d;lastReport=d.analysis||null;render();if(lastReport)renderReport(lastReport);$('idea').value=d.idea||'';$('kind').value=d.type||'auto'}
+$('refresh').onclick=()=>run(refresh);
+$('discover').onclick=()=>run(async()=>{const d=await api('discover',{idea:$('idea').value,type:$('kind').value});state=d;lastReport=null;render();msg('외부 검색 완료: '+d.candidates.length+'건 / 독립 사업 검증 0건')});
+$('manualToggle').onclick=()=>{$('manualBox').hidden=!$('manualBox').hidden};
+$('manualGo').onclick=()=>run(async()=>{const candidates=$('manualUrls').value.split(/\r?\n/).filter(Boolean).map(t=>{const [url,name,summary]=t.split('|');return{url:url.trim(),name:name?.trim(),summary:summary?.trim()}});state=await api('discover',{idea:$('idea').value||'직접 URL 조사',type:$('kind').value,candidates});lastReport=null;render();msg('수동 URL '+state.candidates.length+'개 등록 · 검증 UNKNOWN')});
+$('analyze').onclick=()=>run(async()=>{const x=await api('analyze',{});state.status=x.report.verdict;renderReport(x.report);msg('Evidence audit complete: '+x.report.verdict+' / '+x.report.blockers.join(', '))});
+$('reject').onclick=()=>run(async()=>{const r=await api('reject',{reason:$('rejectReason').value});state=r;lastReport=null;render();$('rejectReason').value='';$('analysis').textContent='반려 이력 보존. 새 회차에서 중복 후보 제외하고 다시 검색하세요.';msg('반려 기록 완료. 현재 회차 '+r.round+' / 기존 제외 후보 '+r.excluded.length)});
+$('approve').onclick=()=>run(async()=>{if(!lastReport)throw Error('ANALYSIS_REQUIRED');const res=await api('approve',{typedConfirmation:$('confirm').value,evidenceHash:lastReport.evidenceHash});$('decision').textContent=res.approval.kind;msg(res);$('confirm').value=''});
+$('assets').onclick=()=>run(async()=>{const v=await api('assets');$('assetList').innerHTML=v.assets.map(x=>'<div class="line"><b>'+safe(x.name)+'</b><br><span class="muted">'+safe(x.source)+' · '+safe(x.qa)+' · 원본 읽기 전용 · SHA-256 '+safe((x.sha256||'미확인').slice(0,14))+'...</span></div>').join('');msg('원본 보존. 검증된 기술을 다시 작성하지 않고 연결만 준비합니다.')});
+$('handoff').onclick=()=>run(async()=>{const v=await api('handoff');msg(v);$('assetList').textContent='독립 실행기 인계 상태: '+v.status+' / 외부 수정·제작 실행 = '+v.productionExecuted});
+$('saveStrategy').onclick=()=>run(async()=>{const strategy=JSON.parse($('strategyJson').value);const x=await api('strategy-draft',{strategy});lastReport=null;msg(x)});
+$('exportMarkdown').onclick=()=>run(async()=>{if(!lastReport)throw Error('ANALYSIS_REQUIRED');const r=await fetch('/api/report.md');if(!r.ok)throw Error('REPORT_EXPORT_BLOCKED');const b=await r.blob();const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='business-strategy-review.md';a.click();setTimeout(()=>URL.revokeObjectURL(u),600)});
+$('exportReport').onclick=()=>{if(!lastReport){msg('먼저 근거 감사를 실행하세요');return}const b=new Blob([JSON.stringify(lastReport,null,2)],{type:'application/json'});const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='strategy-review_'+lastReport.round+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),500)};
+run(refresh);
+</script></body></html>
