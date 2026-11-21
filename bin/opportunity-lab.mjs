@@ -22,13 +22,15 @@ const send=(res,code,obj)=>{res.writeHead(code,{'Content-Type':'application/json
 const body=async(req)=>{let s='';for await(const chunk of req){s+=chunk;if(s.length>250000)throw Error('INPUT_TOO_LARGE')}return JSON.parse(s||'{}')};
 const save=()=>{const ts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()).replace(/[^0-9]/g,'');const suffix=String(state.round).padStart(2,'0');const file=path.join(dir,'round_'+ts+'_'+suffix+'_'+String(Date.now())+'.json');fs.writeFileSync(file,JSON.stringify(state,null,2)+'\n');return path.relative(root,file)};
 const searchEnabled=fs.existsSync(path.join(root,'node_modules','@tavily','core','package.json'));
+// Only report whether a Gemini credential is loaded; never serialize or log its value.
+const geminiCredentialLoaded=Boolean(process.env.GEMINI_API_KEY||process.env.GOOGLE_API_KEY);
 async function tavily(idea,type,reason){
  if(!searchEnabled)throw Error('SEARCH_SDK_NOT_INSTALLED: npm install --no-save --no-package-lock --ignore-scripts @tavily/core');
  return await searchCandidates(idea,type,reason);
 }
 async function act(req,res,route){
  try{
- if(route==='/api/state')return send(res,200,{...state,searchEnabled,searchProvider:searchEnabled?'Tavily official SDK (keyless, limited)':'Not installed'});
+ if(route==='/api/state')return send(res,200,{...state,searchEnabled,searchProvider:searchEnabled?'Tavily official SDK (keyless, limited)':'Not installed',gemini:{credentialLoaded:geminiCredentialLoaded,authenticationVerified:false,groundingEnabled:false,reason:'AUTH_AND_BILLING_NOT_VERIFIED'}});
  const x=await body(req);
  if(route==='/api/discover'){
  const idea=String(x.idea||'').trim().slice(0,350);

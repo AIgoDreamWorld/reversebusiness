@@ -35,7 +35,7 @@ summary{cursor:pointer;font-weight:650}details{border-top:1px solid #ebedf0;padd
 <div id="error" aria-live="polite"></div></section>
 <section class="card"><h2>02 · 독립 검증 기준</h2><p>기존 7×7을 변경하지 않고, 해당 축에 공개 근거를 추가합니다.</p><div id="axes"><div class="row"><span class="tag">Who</span><span class="tag">What</span><span class="tag">Where</span><span class="tag">Market</span><span class="tag">How</span><span class="tag">Pricing</span><span class="tag">Niche</span></div></div>
 <p class="notice"><strong>검증 절차:</strong> 외부 검색 결과는 발견 근거일 뿐입니다. 지불 능력·수익성·미래 시장 규모를 증명하지 않으며, 부족한 증거는 UNKNOWN/HOLD로 남습니다.</p>
-<p class="muted">미래 가치: 시점이 명시된 수요 신호, 기술 변화, 경쟁 위험, 세 가지 미래 시나리오를 분리해 분석해야 합니다.</p></section></div>
+<p class="muted">미래 가치: 시점이 명시된 수요 신호, 기술 변화, 경쟁 위험, 세 가지 미래 시나리오를 분리해 분석해야 합니다.</p><p id="geministatus" class="muted">Gemini 키 등록 상태 확인 중...</p></section></div>
 <section class="card"><div class="row" style="justify-content:space-between"><h2>03 · 후보와 증거</h2><button id="recommend">상위 3개 전략 초안 만들기</button></div><p class="muted">아래 순서는 검색 발견순이며 사업 성공 가능성 순위가 아닙니다. 모든 후보는 독립 검증 전입니다.</p><p id="searchstats" class="muted"></p><div id="candidates" class="muted">입력된 아이디어나 URL이 아직 없습니다.</div></section>
 <div class="grid"><section class="card"><h2>04 · 추천 3개와 전략</h2><div id="recommendations" class="muted">증거 있는 후보를 검토한 후 추천 초안을 생성합니다.</div></section>
 <section class="card"><h2>05 · WJ 승인·보완·반려</h2><p>반려 시 기존 결과와 이유를 기록하고 새 탐색을 시작합니다. 예전 후보는 새 증거 없이 다시 추천하지 않습니다.</p>
@@ -93,5 +93,5 @@ $('importgo').onclick=async()=>{err('');try{const candidates=$('urls').value.spl
 $('recommend').onclick=async()=>{err('');try{store(await api('recommend',{}))}catch(e){err(e)}};
 $('reject').onclick=async()=>{err('');try{store(await api('reject',{reason:$('reason').value+' / '+$('memo').value}));$('memo').value=''}catch(e){err(e)}};
 $('export').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='opportunity-round_'+String(state.round)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)};
-api('state').then(x=>{store(x);$('idea').value=x.idea||'';$('kind').value=x.type||'auto';$('mode').textContent=x.searchEnabled?'Tavily 검색 연결 · 무료 일일 한도 적용':'URL 수동 입력 · 검색 미연결'}).catch(err);
+api('state').then(x=>{store(x);$('idea').value=x.idea||'';$('kind').value=x.type||'auto';$('mode').textContent=x.searchEnabled?'Tavily 검색 연결 · 무료 일일 한도 적용':'URL 수동 입력 · 검색 미연결';$('geministatus').textContent=x.gemini?.credentialLoaded?'Gemini 키는 프로그램에 등록됨 · 실제 인증/Google 검색은 비용 검토 전 보류':'Gemini 키를 아직 프로그램에서 읽지 못함 · 유료 검색 없음'}).catch(err);
 </script></body></html>
