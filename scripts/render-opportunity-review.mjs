@@ -65,7 +65,7 @@ for(const s of data.market.futureScenarios)p('- '+s);
 p('');
 p('## 추천 사업 3개 — 독립 전략과 90일 실행 계획');
 for(const x of data.strategies){
- p('### '+x.priority+'순위 · '+x.title);
+ p('### '+x.priority+'순위 · '+x.title.trim());
  p('**구매자 가설:** '+x.buyer);
  p('');
  p('**구매자가 겪는 문제:** '+x.problem);
