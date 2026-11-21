@@ -11,3 +11,6 @@ rebiz-*/
 evidence/
 source.json
 requests.json
+
+# Opportunity Lab local research snapshots
+experiments/opportunity-lab/

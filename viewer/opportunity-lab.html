@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opportunity Lab · 사업 기회 검증</title>
+<style>
+:root{color-scheme:light;font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f6f8;color:#1d2833}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:1170px;margin:auto;padding:30px 22px 80px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:30px}.brand{font-size:12px;font-weight:750;letter-spacing:.17em;color:#597080}.pill{font-size:12px;background:white;border:1px solid #dde1e7;border-radius:99px;padding:7px 12px}
+h1{font-size:clamp(27px,4vw,43px);letter-spacing:-.04em;margin:4px 0 8px}p{color:#61717f;margin:7px 0 16px}.muted{color:#71808c;font-size:13px}
+.card{background:#fff;border:1px solid #e3e7ed;border-radius:18px;padding:23px;margin:18px 0;box-shadow:0 4px 25px rgba(40,51,64,.035)}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+label{font-size:13px;font-weight:650;display:block;margin:8px 0}input,select,textarea{background:white;border:1px solid #d4dbe3;border-radius:10px;padding:11px 12px;font:inherit;width:100%;color:#243240}
+input:focus,select:focus,textarea:focus{outline:2px solid #b6cdf2}textarea{min-height:75px;resize:vertical}
+button{font:inherit;cursor:pointer;border:1px solid #cbd4df;background:#fff;color:#21364a;border-radius:10px;padding:10px 14px}
+button.primary{background:#253b54;color:#fff;border-color:#253b54}button:disabled{opacity:.45;cursor:not-allowed}
+h2{font-size:19px;letter-spacing:-.025em;margin:0 0 12px}h3{margin:0 0 5px;font-size:16px}.cardline{padding:14px 0;border-top:1px solid #edf0f2}
+.cardline:first-child{border-top:none}.tag{font-size:11px;border:1px solid #e0e4e9;padding:3px 8px;border-radius:8px;background:#fafbfc}
+.status{font-size:11px;font-weight:750;color:#936000;letter-spacing:.04em}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{background:#fff;border-radius:12px;padding:15px;border:1px solid #e3e7ed}
+.stat b{font-size:23px;display:block}.stat small{color:#73808e}a{color:#2b5b92}a:hover{text-decoration:none}
+summary{cursor:pointer;font-weight:650}details{border-top:1px solid #ebedf0;padding:10px 0}footer{padding:20px 0;color:#74818b;font-size:12px}
+.notice{background:#fff6e7;padding:12px;border-radius:10px;color:#7a5527;font-size:13px}
+#error{color:#b52238;white-space:pre-wrap}.hidden{display:none}.small{font-size:12px}
+@media(max-width:790px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.shell{padding:18px 12px}}
+</style></head><body><div class="shell">
+<header><span class="brand">REVERSEBUSINESS / OPPORTUNITY LAB</span><span id="mode" class="pill">검색 연결 확인 중</span></header>
+<h1>아이디어에서 사업 기회까지.</h1>
+<p>실제 URL과 독립 증거를 찾아 비교하고, 최대 10개 후보 중 3개를 전략 검토 대상으로 제안합니다. <b>추천 ≠ 사업성 승인.</b></p>
+<div class="stats"><div class="stat"><b id="num">0</b><small>발견 후보 / 최대 10</small></div><div class="stat"><b id="rec">0</b><small>전략 추천 / 최대 3</small></div><div class="stat"><b id="round">1</b><small>탐색 회차</small></div><div class="stat"><b id="hold">0</b><small>증거 부족 후보</small></div></div>
+<div class="grid"><section class="card"><h2>01 · 사업 기회 탐색</h2>
+<label for="idea">아이디어 또는 URL</label><textarea id="idea" placeholder="예: AI 역사 영상을 제작해 학교·박물관에 공급하는 서비스 또는 콘텐츠"></textarea>
+<label for="kind">사업 유형</label><select id="kind"><option value="auto">서비스와 콘텐츠 모두</option><option value="service">서비스 중심</option><option value="content">콘텐츠 중심</option></select>
+<div class="row" style="margin-top:17px"><button class="primary" id="discover">실제 후보 찾기</button><button id="import">증거 URL 10개까지 붙여넣기</button></div>
+<p class="muted">검색 제공자 키 없이도 URL 목록을 가져올 수 있습니다. URL과 함께 넣은 설명은 검증 완료로 인정되지 않습니다.</p>
+<div id="importbox" class="hidden"><label>한 줄마다 URL 또는 URL | 이름 | 설명</label><textarea id="urls" placeholder="https://example.com | 예시 업체 | 공개된 서비스 소개"></textarea><button id="importgo">후보 등록</button></div>
+<div id="error" aria-live="polite"></div></section>
+<section class="card"><h2>02 · 독립 검증 기준</h2><p>기존 7×7을 변경하지 않고, 해당 축에 공개 근거를 추가합니다.</p><div id="axes"><div class="row"><span class="tag">Who</span><span class="tag">What</span><span class="tag">Where</span><span class="tag">Market</span><span class="tag">How</span><span class="tag">Pricing</span><span class="tag">Niche</span></div></div>
+<p class="notice"><strong>검증 절차:</strong> 외부 검색 결과는 발견 근거일 뿐입니다. 지불 능력·수익성·미래 시장 규모를 증명하지 않으며, 부족한 증거는 UNKNOWN/HOLD로 남습니다.</p>
+<p class="muted">미래 가치: 시점이 명시된 수요 신호, 기술 변화, 경쟁 위험, 세 가지 미래 시나리오를 분리해 분석해야 합니다.</p></section></div>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>03 · 후보와 증거</h2><button id="recommend">상위 3개 전략 초안 만들기</button></div><div id="candidates" class="muted">입력된 아이디어나 URL이 아직 없습니다.</div></section>
+<div class="grid"><section class="card"><h2>04 · 추천 3개와 전략</h2><div id="recommendations" class="muted">증거 있는 후보를 검토한 후 추천 초안을 생성합니다.</div></section>
+<section class="card"><h2>05 · WJ 승인·보완·반려</h2><p>반려 시 기존 결과와 이유를 기록하고 새 탐색을 시작합니다. 예전 후보는 새 증거 없이 다시 추천하지 않습니다.</p>
+<label for="reason">반려 사유</label><select id="reason"><option>고객 수요·수익성 증거 부족</option><option>경쟁 공백이 약함</option><option>미래 가치가 불충분함</option><option>초기 개발·운영 비용이 큼</option><option>근거 신뢰도가 부족함</option><option>다른 아이디어를 탐색하고 싶음</option></select>
+<label for="memo">추가 검수 의견</label><textarea id="memo" placeholder="어느 고객군과 니치를 다시 찾아볼지 기록"></textarea><div class="row"><button id="reject">반려 기록 후 새 회차</button><button id="export">현재 기록 내려받기</button></div><p id="log" class="muted"></p></section></div>
+<footer>Local-only MVP · 기존 원본·Golden 보존 · 실제 계약/배포 없음 · 7×7 근거가 없으면 검증 보류</footer>
+</div><script>
+const $=id=>document.getElementById(id);let state={candidates:[],recommendations:[],round:1,excluded:[]};
+const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api=async(route,body=null)=>{const r=await fetch('/api/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok)throw Error(v.error||'요청 실패');return v};
+const err=e=>{$('error').textContent=e?.message||String(e)};
+const store=x=>{state=x;render()};
+function render(){
+ $('num').textContent=state.candidates?.length||0;$('rec').textContent=state.recommendations?.length||0;$('round').textContent=state.round||1;
+ $('hold').textContent=(state.candidates||[]).filter(c=>Object.values(c.axes||{}).some(v=>v.status!=='VERIFIED')).length;
+ const out=$('candidates');out.replaceChildren();
+ if(!state.candidates?.length){out.textContent='해당 회차에서 확인된 후보가 없습니다.'}
+ for(const [j,c] of (state.candidates||[]).entries()){
+  const div=document.createElement('div');div.className='cardline';
+  const evidence=Object.values(c.axes||{}).filter(a=>a.status==='SOURCED'||a.status==='VERIFIED').length;
+  div.innerHTML='<div class="row"><strong>'+(j+1)+'. '+safe(c.name)+'</strong><span class="tag">'+safe(c.kind)+'</span><span class="status">'+evidence+'/7 근거 완료 · HOLD</span></div>'+
+  '<div><a rel="noopener noreferrer" target="_blank" href="'+safe(c.url)+'">'+safe(c.url)+'</a></div><p class="small">'+safe(c.summary).slice(0,340)+'</p>';
+  const details=document.createElement('details');details.innerHTML='<summary>7×7 축별 증거 입력 / 검증</summary>';
+  const field=document.createElement('div');
+  field.className='grid';
+  const left=document.createElement('div'),right=document.createElement('div');
+  left.innerHTML='<label>축</label><select class="axis">'+['Who','What','Where','Market','How','Pricing','Niche'].map(v=>'<option>'+v+'</option>').join('')+'</select><label>근거 원본 URL</label><input class="eurl" placeholder="https://..."><label>어떤 사실을 직접 확인했는가?</label><textarea class="note" placeholder="날짜·원본·실측/회사 주장 구분"></textarea>';
+  right.innerHTML='<p class="notice">검색 결과를 읽은 것과 사실을 독립 검증한 것은 다릅니다. 원문 근거와 검증 내용이 있어야 VERIFIED로 표시합니다.</p>';
+  const button=document.createElement('button');button.textContent='이 축의 증거 저장';button.onclick=async()=>{try{const axis=left.querySelector('.axis').value,url=left.querySelector('.eurl').value,note=left.querySelector('.note').value;const result=await api('update',{id:c.id,axis,status:url&&note?'SOURCED':'UNKNOWN',note,evidence:url&&note?[{url,note}]:[]});state.candidates[j]=result.candidate;render()}catch(e){err(e)}};
+  right.append(button);field.append(left,right);details.append(field);div.append(details);out.append(div)
+ }
+ const rec=$('recommendations');rec.replaceChildren();
+ if(!state.recommendations?.length)rec.textContent='아직 추천 초안이 없습니다.';
+ for(const [j,x] of (state.recommendations||[]).entries()){
+  const a=document.createElement('article');a.className='cardline';
+  a.innerHTML='<strong>'+(j+1)+'. '+safe(x.candidate.name)+'</strong><div class="muted">'+safe(x.role)+' · '+x.audit.sourced+'/7 증거 · '+safe(x.audit.verdict)+'</div><p>'+safe(x.candidate.summary).slice(0,280)+'</p><p class="notice">전략 초안: WHO와 Niche, 경쟁·가격·미래 신호를 추가 검증한 후 비용·고객 확보·3개월 계획을 확정하세요. 아직 상업적 승인 아님.</p>';
+  const details=document.createElement('details');
+  const r=x.report||{};
+  const axisRows=(r.axes||[]).map(z=>'<tr><td>'+safe(z.axis)+'</td><td>'+safe(z.status)+'</td><td>'+safe(z.claim).slice(0,260)+'</td></tr>').join('');
+  details.innerHTML='<summary>7×7 분석·3개월 실험 전략·미확인 사실 펼쳐보기</summary>'+
+   '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>축</th><th>증거 상태</th><th>기록</th></tr></thead><tbody>'+axisRows+'</tbody></table>'+
+   '<p class="small"><b>30일:</b> '+safe(r.strategy?.first30Days)+'</p>'+
+   '<p class="small"><b>60일:</b> '+safe(r.strategy?.days31to60)+'</p>'+
+   '<p class="small"><b>90일:</b> '+safe(r.strategy?.days61to90)+'</p>'+
+   '<p class="notice"><b>미확인:</b> '+safe((r.missing||[]).join(', ')||'독립 검증 추가 필요')+'<br><b>미래 가치:</b> '+safe(r.trend?.status||'UNKNOWN')+' — 보수/기준/낙관 시나리오는 숫자 예측이 아닌 가설입니다.</p>';
+  a.append(details);
+  rec.append(a)
+ }
+ $('log').textContent='기록 '+(state.history?.length||0)+'건 · 과거 후보 '+(state.excluded?.length||0)+'건';
+}
+$('discover').onclick=async()=>{err('');try{store(await api('discover',{idea:$('idea').value,type:$('kind').value}))}catch(e){err(e)}};
+$('import').onclick=()=>{$('importbox').classList.toggle('hidden')};
+$('importgo').onclick=async()=>{err('');try{const candidates=$('urls').value.split(/\r?\n/).filter(Boolean).map(s=>{const [url,name,summary]=s.split('|');return{url:url.trim(),name:name?.trim(),summary:summary?.trim()}});store(await api('discover',{idea:$('idea').value||'사용자 지정 URL 조사',type:$('kind').value,candidates}))}catch(e){err(e)}};
+$('recommend').onclick=async()=>{err('');try{store(await api('recommend',{}))}catch(e){err(e)}};
+$('reject').onclick=async()=>{err('');try{store(await api('reject',{reason:$('reason').value+' / '+$('memo').value}));$('memo').value=''}catch(e){err(e)}};
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='opportunity-round_'+String(state.round)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)};
+api('state').then(x=>{store(x);$('mode').textContent=x.searchEnabled?'외부 검색 연결됨':'URL 수동 입력 · 검색 미연결'}).catch(err);
+</script></body></html>
