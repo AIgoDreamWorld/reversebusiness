@@ -9,6 +9,7 @@ import {searchCandidates} from '../lib/opportunity-search.mjs';
 import {composeReport,issueDecision,reusableAssetHandoff,strategyIntegrity} from '../lib/governed-pipeline.mjs';
 import {listKnownReusableAssets,mapAssetsToHandoff} from '../lib/reuse-index.mjs';
 import {exportResearchMarkdown} from '../lib/strategy-report.mjs';
+import {capturePublicCandidate} from '../lib/source-capture.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dir=process.env.OPPORTUNITY_DATA_DIR?path.resolve(process.env.OPPORTUNITY_DATA_DIR):path.join(root,'experiments','opportunity-lab');
 const ui=path.join(root,'viewer','business-pipeline.html');
@@ -57,6 +58,16 @@ async function act(req,res,route){
    state={...state,idea,type,candidates,recommendations:[],strategyDrafts:[],analysis:null,approval:null,searchStats:search?.stats||{provider:'MANUAL_URLS_UNVERIFIED',selected:candidates.length},status:candidates.length?'DISCOVERED':'INSUFFICIENT_RESULTS'};
    assertRound(state);
    return send(res,200,{...state,saved:save()});
+  }
+  if(route==='/api/capture'){
+   if(x.confirm!=='공개 페이지 수집')return send(res,403,{error:'EXPLICIT_PUBLIC_CAPTURE_CONFIRMATION_REQUIRED'});
+   const target=state.candidates.find(c=>c.id===x.id);
+   if(!target)return send(res,404,{error:'CANDIDATE_NOT_FOUND'});
+   const proof=await capturePublicCandidate({root,outputRoot:dir,url:target.url});
+   target.sourceCapture=proof;
+   target.axes.What={status:'SOURCED',note:'Existing REBiz collector observed a public supplier page. This does not verify customer demand or company claims.',evidence:[{url:target.url,note:'The existing REBiz collector captured the public supplier landing page; independent verification not done.',checkedAt:proof.checkedAt,contentHash:proof.contentHash,captureOrigin:'REVERSEBUSINESS_COLLECTOR',sourceType:'PROVIDER'}]};
+   invalidate();
+   return send(res,200,{candidate:target,proof,saved:save()});
   }
   if(route==='/api/update'){
    const target=state.candidates.find(c=>c.id===x.id);

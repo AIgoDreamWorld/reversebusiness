@@ -12,7 +12,7 @@
 <div class="box"><h2>01 · 어떤 사업을 찾을까?</h2><div class="grid"><div><label for="idea">아이디어 또는 사업 분야</label><textarea id="idea" placeholder="예: 학교 체험형 3D 물리 시뮬레이터"></textarea></div><div><label for="kind">검색 범위</label><select id="kind"><option value="auto">서비스 + 콘텐츠</option><option value="service">서비스 사업</option><option value="content">콘텐츠 사업</option></select><p class="muted">검색은 분야에 무관하게 작동하도록 수정됨. Tavily 무료 한도 사용, Google 선불 잔액 0원인 동안 Gemini 유료 API 사용 없음.</p></div></div>
 <div class="row"><button id="discover">실제 URL 검색 실행</button><button class="alt" id="manualToggle">이미 찾은 URL 등록</button><span id="provider" class="muted"></span></div>
 <div id="manualBox" hidden><p class="muted">한 줄에 URL | 서비스 이름 | 설명. 붙여넣은 URL은 실재성 검증이 아닙니다.</p><textarea id="manualUrls" placeholder="https://example.com | Example | 상품 소개"></textarea><button id="manualGo">URL 후보 등록</button></div></div>
-<div class="box"><div class="row"><h2 style="flex:1">02 · 검색 후보와 증거</h2><span class="pill hold">URL 발견 ≠ 검증</span></div><div id="candidateList">검색할 아이디어를 입력해 주세요.</div></div>
+<div class="box"><div class="row"><h2 style="flex:1">02 · 검색 후보와 증거</h2><span class="pill hold">URL 발견 ≠ 검증</span></div><p class="muted">기존 REBiz 수집기(robots 준수)를 선택한 후보에만 직접 실행할 수 있어요. 한 번에 공개 페이지 1장, 로그인·우회·결제 없음. 이는 공급자 설명 수집이지 독립 사업 검증이 아닙니다.</p><div id="candidateList">검색할 아이디어를 입력해 주세요.</div></div>
 <div class="box"><div class="row"><h2 style="flex:1">03 · 자동 증거 감사와 전략 검토</h2><button id="analyze">현재 후보 근거 감사</button></div>
 <p class="notice">후보 10개의 단순 검색 순위를 사업 성공 가능성 순위로 사용하지 않습니다. 근거가 부족하면 ‘연구 우선 후보 3개’만 제시하고 사업 전략 추천과 WJ 승인은 차단합니다.</p>
 <div id="analysis">아직 감사하지 않았습니다.</div><details><summary>전문 분석 결과(데이터) 내려받기</summary><div class="row"><button class="alt" id="exportReport">감사 JSON 저장</button><button class="alt" id="exportMarkdown">전략 보고서 MD 내려받기</button></div></details>
@@ -45,7 +45,11 @@ function renderCandidates(){
   const right=document.createElement('div');right.innerHTML='<label>자료의 성격</label><select class="sourceKind"><option value="PROVIDER">업체 자체 자료</option><option value="INDEPENDENT">독립 외부 자료</option></select><p class="notice">단순히 독립 자료를 선택해도 출처 해시와 실제 대조가 없으면 검증 미완료입니다.</p>';
   const b=document.createElement('button');b.className='alt';b.textContent='원문 링크·주장만 기록';
   b.onclick=()=>run(async()=>{const url=left.querySelector('.sourceUrl').value,note=left.querySelector('.sourceNote').value;const j=await api('update',{id:c.id,axis:left.querySelector('.axis').value,status:url&&note?'SOURCED':'UNKNOWN',note,evidence:url&&note?[{url,note,checkedAt:new Date().toISOString(),sourceType:right.querySelector('.sourceKind').value}]:[]});state.candidates[i]=j.candidate;lastReport=null;render();msg('수집 근거 저장: SOURCED (독립 검증 아님)')});
-  right.append(b);grid.append(left,right);det.append(grid);div.append(det);el.append(div);
+  right.append(b);grid.append(left,right);det.append(grid);div.append(det);
+  const capture=document.createElement('button');capture.className='alt';capture.textContent=c.sourceCapture?'공개 페이지 재수집 (기존 증거 보존)':'기존 REBiz 수집기로 공개 페이지 1장 검사';
+  capture.onclick=()=>run(async()=>{capture.disabled=true;msg('기존 공개 자료 수집기 실행 중 · robots 제한 준수 · 유료 API 호출 없음');const j=await api('capture',{id:c.id,confirm:'공개 페이지 수집'});state.candidates[i]=j.candidate;lastReport=null;render();msg('공급자 공개 페이지 기록 완료 / 캡처 SHA-256 '+j.proof.contentHash.slice(0,20)+'... / 실제 매출·구매 증거 UNKNOWN / '+j.proof.termsStatus)});
+  div.append(capture);if(c.sourceCapture){const t=document.createElement('div');t.className='muted';t.textContent='기존 수집기 공개 페이지 확보 · '+c.sourceCapture.checkedAt+' · 공급자 정보만 SOURCED';div.append(t)}
+  div.append(det);el.append(div);
  });
 }
 function render(){

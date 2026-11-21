@@ -38,6 +38,9 @@ test('end-to-end local business workflow is evidence-gated without external API 
  const urls=Array.from({length:10},(_,i)=>({url:'https://company'+(i+1)+'.example.org/product',name:'Provider '+(i+1),summary:'A public landing page, business unverified'}));
  const discovery=await post('discover',{idea:'robotic Korean language tutor',type:'service',candidates:urls});
  assert.equal(discovery.status,200);assert.equal(discovery.body.candidates.length,10);
+ const unauthorizedCapture=await post('capture',{id:discovery.body.candidates[0].id,confirm:'no'});
+ assert.equal(unauthorizedCapture.status,403);
+ assert.equal(unauthorizedCapture.body.error,'EXPLICIT_PUBLIC_CAPTURE_CONFIRMATION_REQUIRED');
  const raw=await fetch(base+'/');
  assert.equal(raw.status,200);assert.ok((await raw.text()).includes('WJ STRATEGY WORKBENCH'));
  const report=await post('analyze',{});
