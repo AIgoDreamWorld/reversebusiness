@@ -52,3 +52,28 @@ test('three recommendations contain seven-axis report and bounded 90-day strateg
   assert.equal(x.report.verdict,'HOLD');
  }
 });
+
+import {filterBusinessResults,searchCandidates} from '../lib/opportunity-search.mjs';
+test('web discovery rejects news articles and comparison listicles',()=>{
+ const rows=[{url:'https://www.pbs.org/newshour/show/ai-film',name:'news'},
+ {url:'https://mootion.com/ugc/en/list/best-ai-video-tools',name:'list'},
+ {url:'https://llamagen.ai/history-video-generator',name:'service'},
+ {url:'https://www.llamagen.ai/history-video-generator-v2',name:'same service'}];
+ const result=filterBusinessResults(rows,'service');
+ assert.equal(result.length,1);assert.equal(result[0].url,'https://llamagen.ai/history-video-generator');
+});
+test('multi-query search can collect ten unique service domains without asserting verification',async()=>{
+ let queries=0;
+ const mock={search:async(q)=>{
+  queries++;
+  const start=queries===1?0:7;
+  const items=Array.from({length:10},(_,i)=>({url:'https://history'+(start+i)+'.example.org/offer',title:'History maker '+(start+i),content:'History video creator'}));
+  if(queries===1)items[0]={url:'https://www.pbs.org/newshour/show/film',title:'News article',content:'Not a service'};
+  return {results:items,requestId:'mock-'+queries};
+ }};
+ const result=await searchCandidates('history video for schools','service','',mock);
+ assert.equal(result.candidates.length,10);
+ assert.equal(result.stats.fullyVerified,0);
+ assert.ok(result.candidates.every(x=>x.source.includes('unverified')));
+ assert.equal(queries,2);
+});

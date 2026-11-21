@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {normalizeCandidates,selectThree,newRound,validateCandidate,assertRound} from '../lib/opportunity-engine.mjs';
+import {searchCandidates} from '../lib/opportunity-search.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dir=path.join(root,'experiments','opportunity-lab');
 const ui=path.join(root,'viewer','opportunity-lab.html');
@@ -20,28 +21,23 @@ if(snapshots.length){try{
 const send=(res,code,obj)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj))};
 const body=async(req)=>{let s='';for await(const chunk of req){s+=chunk;if(s.length>250000)throw Error('INPUT_TOO_LARGE')}return JSON.parse(s||'{}')};
 const save=()=>{const ts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()).replace(/[^0-9]/g,'');const suffix=String(state.round).padStart(2,'0');const file=path.join(dir,'round_'+ts+'_'+suffix+'_'+String(Date.now())+'.json');fs.writeFileSync(file,JSON.stringify(state,null,2)+'\n');return path.relative(root,file)};
-async function tavily(query){
- const key=process.env.TAVILY_API_KEY;
- if(!key)throw Error('SEARCH_NOT_CONFIGURED: TAVILY_API_KEY is required; import evidence manually.');
- const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),18000);
- try{
- const response=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
- body:JSON.stringify({query,max_results:10,search_depth:'basic',include_answer:false,include_raw_content:false}),signal:ctrl.signal});
- if(!response.ok)throw Error('SEARCH_PROVIDER_HTTP_'+response.status);
- const data=await response.json();return (data.results||[]).map(x=>({url:x.url,name:x.title,summary:x.content,source:'Tavily search result — unverified'}));
- }finally{clearTimeout(timer)}
+const searchEnabled=fs.existsSync(path.join(root,'node_modules','@tavily','core','package.json'));
+async function tavily(idea,type,reason){
+ if(!searchEnabled)throw Error('SEARCH_SDK_NOT_INSTALLED: npm install --no-save --no-package-lock --ignore-scripts @tavily/core');
+ return await searchCandidates(idea,type,reason);
 }
 async function act(req,res,route){
  try{
- if(route==='/api/state')return send(res,200,{...state,searchEnabled:!!process.env.TAVILY_API_KEY});
+ if(route==='/api/state')return send(res,200,{...state,searchEnabled,searchProvider:searchEnabled?'Tavily official SDK (keyless, limited)':'Not installed'});
  const x=await body(req);
  if(route==='/api/discover'){
  const idea=String(x.idea||'').trim().slice(0,350);
  if(!idea)return send(res,400,{error:'IDEA_REQUIRED'});
  const type=['auto','service','content'].includes(x.type)?x.type:'auto';
- const raw=Array.isArray(x.candidates)?x.candidates:await tavily(idea+' '+(type==='content'?'YouTube creator channel content business':type==='service'?'SaaS service product pricing':'business service content creator platform')+(state.history.length?' excluding previous rejected options; seek other niche: '+state.history.at(-1).reason.slice(0,180):''));
+ const search=Array.isArray(x.candidates)?null:await tavily(idea,type,state.history.length?state.history.at(-1).reason.slice(0,180):'');
+ const raw=search?search.candidates:x.candidates;
  const candidates=normalizeCandidates(raw,state.excluded.map(y=>y.url));
- state={...state,idea,type,candidates,recommendations:[],status:candidates.length?'DISCOVERED':'INSUFFICIENT_RESULTS'};
+ state={...state,idea,type,candidates,recommendations:[],searchStats:search?.stats||null,status:candidates.length?'DISCOVERED':'INSUFFICIENT_RESULTS'};
  assertRound(state);return send(res,200,{...state,saved:save()});
  }
  if(route==='/api/update'){
@@ -77,4 +73,4 @@ const server=http.createServer((req,res)=>{
  if(req.method==='GET'&&route==='/api/state'||req.method==='POST'&&route.startsWith('/api/'))return void act(req,res,route);
  send(res,404,{error:'NOT_FOUND'});
 });
-server.listen(port,'127.0.0.1',()=>console.log('Opportunity Lab http://127.0.0.1:'+port+' search='+Boolean(process.env.TAVILY_API_KEY)));
+server.listen(port,'127.0.0.1',()=>console.log('Opportunity Lab http://127.0.0.1:'+port+' search='+searchEnabled+' provider=Tavily-keyless'));
