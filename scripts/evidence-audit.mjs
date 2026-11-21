@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // AIBA opt-in independent audit; does not modify upstream check-report or evidence.
-// Usage: node scripts/aiba-audit.mjs <report.json> [source.json] [--dissect-only]
+// Usage: node scripts/evidence-audit.mjs <report.json> [source.json] [--dissect-only]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,7 +57,7 @@ export function auditReport(report, source = null, { dissectOnly = true } = {}) 
 
 function main() {
   const args = process.argv.slice(2).filter(x => !x.startsWith('--'));
-  if (!args[0]) { console.error('Usage: node scripts/aiba-audit.mjs <report.json> [source.json] [--dissect-only]'); process.exit(2); }
+  if (!args[0]) { console.error('Usage: node scripts/evidence-audit.mjs <report.json> [source.json] [--dissect-only]'); process.exit(2); }
   try {
     const reportPath = path.resolve(args[0]);
     const sourcePath = path.resolve(args[1] || path.join(path.dirname(reportPath), 'source.json'));
